@@ -1,0 +1,29 @@
+# Pylades — Streamlit-theme (releaseversie: shared/version.py).
+#
+# Warm oranje als primary (Pylades accent), donkere base,
+# zachte off-cream achtergrond op tweede laag. `serif`-font voor headers
+# voelt te formeel; sans-serif blijft modern.
+
+[theme]
+base = "dark"
+primaryColor = "#F97315"            # Pylades accent — knoppen, links
+backgroundColor = "#0F1115"         # bijna-zwart, niet pikzwart
+secondaryBackgroundColor = "#171A21" # cards, sidebar
+textColor = "#E8E6E1"               # warm off-white
+# Helvetica wordt via `ui/theme.py` afgedwongen (Streamlit-theme kent geen exacte fontnaam).
+font = "sans serif"
+
+[client]
+# Geen "Ask Google" / "Ask ChatGPT" op exception-cards (privacy + gerichte debug).
+showErrorLinks = false
+# Verberg Deploy, Rerun en Clear caches in de rechter-werkbalk (zie README § Streamlit-werkbalk).
+toolbarMode = "viewer"
+# MPAv1 auto-nav uit — st.navigation + st.page_link (geen sidebar-flicker).
+showSidebarNavigation = false
+
+[server]
+headless = true
+enableCORS = false
+
+[browser]
+gatherUsageStats = false

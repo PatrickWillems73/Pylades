@@ -1,0 +1,70 @@
+---
+description: Pylades UI — kleur-status-logica voor linkerranden en feedback (Eenvoudig + Status)
+alwaysApply: true
+---
+
+# Pylades — UI kleur-status-logica
+
+Kleurcommunicatie in de UI valt in twee lagen:
+
+1. **Merk-accent** — oranje `#F97315` (Streamlit `primaryColor`, sidebar-titels, metric-cards, button-hover). Geen status.
+2. **Status-semantiek** — groen / blauw / geel / rood op inhoudsblokken en arcering.
+
+Implementatie: [`ui/theme.py`](ui/theme.py) (constanten + CSS) + helpers in [`ui/Home.py`](ui/Home.py) en [`ui/testrun_helpers.py`](ui/testrun_helpers.py).
+
+## Kleurpalet
+
+| Rol | Hex | Gebruik |
+| --- | --- | --- |
+| Merk-accent | `#F97315` | Knoppen, sidebar h2, metric-card rand |
+| OK / ONE_WAY | `#2E7D32` | Beschermd (verborgen), samenvatting ok, LLM-antwoord rand |
+| TWO_WAY | `#256F8A` | Beschermd (verborgen + terug vertaald) |
+| Pending / aandacht | `#D4A017` | Wacht op beoordeling, HTTP 423, inline-status dot |
+| Fout | `#A0263A` | Proxy/HTTP-fout (niet merk-accent) |
+
+## Entiteit-rijen (Eenvoudig, `.pylades-soft-panel`)
+
+| Status | Modus | Linkerrand |
+| --- | --- | --- |
+| Beschermd | ONE_WAY — verborgen voor extern LLM | **Groen** `#2E7D32` |
+| Beschermd | TWO_WAY — verborgen én terug vertaald in antwoord | **Blauw** `#256F8A` |
+| Actie nodig | Pending — wacht op jouw beoordeling | **Geel/amber** `#D4A017` |
+
+## Pending-melding (Eenvoudig, `.pylades-notice--attention`)
+
+Twijfeltekst boven de review-knop (`attention_notice` in `ui/ui_extras.py`): geel/amber achtergrond + linkerrand, warm gele tekst — zelfde semantiek als *Wacht op jouw beoordeling*.
+
+## Samenvattingsstrip (Eenvoudig, `.pylades-accent-strip`)
+
+| Klasse | Wanneer | Linkerrand |
+| --- | --- | --- |
+| `--ok` | Analyse ok, geen pending, geen fout (ook na HTTP 200) | **Groen** `#2E7D32` |
+| `--attention` | Pending review-items of HTTP 423 | **Geel/amber** `#D4A017` |
+| `--error` | Geen proxy-verbinding, HTTP 4xx/5xx (≠ 423) | **Rood** `#A0263A` |
+
+## LLM-antwoord (Eenvoudig, `.pylades-llm-response`)
+
+Groene linkerrand `#2E7D32` — antwoord succesvol ontvangen (HTTP 200 met tekst).
+
+## Preview-arcering (Eenvoudig + Uitgebreid)
+
+Placeholders en pending originals in “Wat het externe LLM zou zien” gebruiken dezelfde statuskleuren als entiteit-rijen: `HIGHLIGHT_*` in `ui/theme.py` leidt rgba-arcering af van `STATUS_*` (alpha 0.50) via `pseudonymized_highlights()`.
+
+| css_key | Arcering |
+| --- | --- |
+| `one_way` | Groen `#2E7D32` @ 50% opacity |
+| `two_way` | Blauw `#256F8A` @ 50% opacity |
+| `pending` | Geel/amber `#D4A017` @ 50% opacity + dashed rand |
+
+## Status-pagina (dependency-kaartjes)
+
+| | Linkerrand |
+| --- | --- |
+| OK | **Groen** `#2E7D32` |
+| Fout | **Rood** `#A0263A` |
+
+## Niet doen
+
+- Geen `#F97315` op status-strips of entiteit-randen — dat is merk, geen status.
+- Geen `#A0263A` als default merk-kleur; rood blijft voor fouten.
+- Geen nieuwe status-kleuren introduceren zonder deze tabel bij te werken.

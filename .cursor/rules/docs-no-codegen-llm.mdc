@@ -1,0 +1,14 @@
+---
+description: Geen LLM/codegen-meta in documentatie
+alwaysApply: true
+---
+
+# Documentatie — geen codegen-LLM-verwijzingen
+
+In README, PLAN, DEMO, SPEC, CONTRIBUTING, CLA en overige docs:
+
+- **Niet** vermelden welke LLM, IDE-agent of tool code/docs heeft gegenereerd (ChatGPT, Copilot, Claude, Cursor Composer, enz.).
+- **Niet** instructies opnemen voor het genereren van code via een LLM (modelkeuze, prompts plakken, Composer).
+- **Wel** documenteren: productgedrag, upstream LLM-provider (Anthropic) als onderdeel van Pylades, en client-apps die via de proxy praten (bijv. Python-script, Claude Desktop).
+
+Spec-bestanden heten neutraal (bijv. `SPEC-v0.3.md`), geen `cursor-prompt-*`.

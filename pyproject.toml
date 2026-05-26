@@ -1,0 +1,109 @@
+[project]
+name = "pylades"
+version = "0.2.2"
+description = "Lokale pseudonimiserende proxy voor extern LLM-gebruik (release sync: shared/version.py)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pylades Contributors" }]
+keywords = ["pseudonymization", "privacy", "llm", "proxy", "anthropic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Natural Language :: Dutch",
+]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "streamlit>=1.40",
+    "streamlit-extras>=1.5.0",
+    "spacy>=3.8,<4.0",
+    "nl-core-news-md @ https://github.com/explosion/spacy-models/releases/download/nl_core_news_md-3.8.0/nl_core_news_md-3.8.0-py3-none-any.whl",
+    "ollama>=0.4",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "rapidfuzz>=3.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+preview = [
+    "streamlit-option-menu>=0.4.0",
+    "streamlit-shadcn-ui>=0.1.19",
+]
+
+[project.urls]
+Homepage = "https://example.invalid/pylades"
+
+# Pylades is een applicatie, geen distributable library: uv hoeft niets te bouwen.
+# Releaseversie: shared/version.py (sync met [project].version hierboven).
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["secrets", "*.db", ".venv"]
+
+[tool.ruff.lint]
+# Pragmatische selectie: stijl (E/W), bugs (F/B), imports (I), modernisering (UP),
+# naming (N), vereenvoudiging (SIM), enkele pylint-checks (PL).
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "PL"]
+# PLR0913 (te veel argumenten) is bij FastAPI-endpoints en Pydantic-modellen normaal.
+ignore = ["PLR0913", "PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+# Streamlit-entry-pagina's: emoji-bestandsnamen (N999) + sys.path-shim moet vóór
+# project-imports staan (E402: module-level import not at top of file).
+"ui/views/*.py" = ["N999", "E402"]
+"ui/Home.py" = ["E402", "N999"]
+"ui_preview.py" = ["E402"]
+"tests/*.py" = ["PLR2004", "S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["shared", "proxy"]
+# Strictheid globaal redelijk; per-module strict via override (BR: strict voor shared/ + proxy/).
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["shared.*", "proxy.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_any_generics = true
+warn_return_any = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+# Externe libraries zonder type stubs: niet zeuren bij imports.
+module = ["spacy", "spacy.*", "ollama", "ollama.*", "rapidfuzz", "rapidfuzz.*", "streamlit", "streamlit.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning:pydantic.*",
+]

@@ -1,0 +1,62 @@
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+*.egg
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+
+# --- uv ----------------------------------------------------------------------
+# uv.lock wordt wel gecommit (reproduceerbare envs), .python-version blijft lokaal.
+.python-version
+
+# --- Pylades runtime data (BR-G01/G02: NIET in git) --------------------------
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets/ map zelf bewaren, inhoud nooit committen.
+secrets/*
+!secrets/.gitkeep
+
+# Gearchiveerde HMAC-sleutels na rotatie (BR-C01 sleutelrotatie-flow).
+*.bin.archived-*
+
+# --- Environment -------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+
+# --- IDE / editor ------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# --- Testing / linting / type-checking --------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Lokale service-log (scripts/pylades_services.py) -------------------------
+logs/
+
+# --- Streamlit ---------------------------------------------------------------
+.streamlit/secrets.toml
+
+# --- spaCy / Ollama caches (lokaal, niet versie-beheerd) --------------------
+.spacy/
