@@ -17,11 +17,10 @@ Iedereen die zich kan vinden in de doelen en spelregels van dit project. Je bijd
 
 De software is bedoeld voor niet-commercieel gebruik. Specifiek welkom zijn:
 
-- Medische instellingen zoals ziekenhuizen
-- Onderwijsinstellingen
-- Onderzoeksorganisaties
-- Liefdadigheidsinstellingen
-- Overheidsinstellingen
+- Ziekenhuizen
+- Eerstelijnszorg in coöperatieve vorm
+- Sociaal werk
+- Onderwijs (passend onderwijs, speciaal onderwijs)
 
 Voor commerciële zorgleveranciers of softwareleveranciers die de software willen integreren in hun product geldt deze licentie niet automatisch. Neem in dat geval contact op.
 
@@ -37,7 +36,7 @@ Bij je eerste pull request ontvang je een verzoek om de Contributor License Agre
 
 ## Wat we van een bijdrage verwachten
 
-- Code volgt de stijlgids van het project (zie `STYLE.md` indien aanwezig)
+- Code volgt de stijlgids van het project ([STYLE.md](STYLE.md))
 - Pull requests bevatten een korte uitleg van wat en waarom
 - Wijzigingen aan publieke interfaces gaan vergezeld van bijgewerkte documentatie
 - Nieuwe functionaliteit komt met tests
@@ -49,7 +48,7 @@ We gaan respectvol met elkaar om. Directheid is welkom, neerbuigendheid niet. Bi
 
 ## Ondersteuning leveren
 
-Naast bijdragen aan de software kun je ook ondersteuning bieden aan gebruikers. Dit kan om niet of tegen vergoeding. Geef in je profiel of in een aparte `SUPPORTERS.md` aan welke ondersteuning je biedt en onder welke voorwaarden.
+Naast bijdragen aan de software kun je ook ondersteuning bieden aan gebruikers. Dit kan om niet of tegen vergoeding. Geef in je profiel of in [SUPPORTERS.md](SUPPORTERS.md) aan welke ondersteuning je biedt en onder welke voorwaarden.
 
 ## Contact
 

@@ -1,6 +1,6 @@
 # Pylades — Architectuurplan (doel: v0.3)
 
-> **Huidige release:** v0.1.2 (`shared/version.py`) · **Doelversie:** v0.3 (deze
+> **Huidige release:** v0.2.2 (`shared/version.py`) · **Doelversie:** v0.3 (deze
 > spec). Bron-spec en business rules: [SPEC-v0.3.md](SPEC-v0.3.md).
 > **Status repo:** Stappen 1–17 geïmplementeerd (zie §19 en §20). Start met
 > `uv run python scripts/pylades_services.py restart` (proxy `:8080`, UI `:8501`).
@@ -9,7 +9,7 @@
 
 ## 1. Wat we bouwen, in één paragraaf
 
-Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.1.2**,
+Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.2.2**,
 richting doel **v0.3**) die zich voordoet als
 Anthropic's `/v1/messages`-endpoint, plus een Streamlit-beheer-UI. De proxy
 detecteert gevoelige entities in elke prompt, generaliseert wat
@@ -820,15 +820,16 @@ dan een mix van body + `Header(...)`-parameters.
 
 ### UI
 
-- **Templates-pagina** (`ui/pages/1_Templates.py`): numeriek veld
+- **Prompts-pagina** (`ui/views/2_Prompts.py`, voorheen "Templates"): numeriek veld
   **Max tokens** (default 16 000), toggle **Ollama-detectie (laag 3)** voor
   `use_llm`. Caption + validator-feedback verwijzen naar verplichte `{input}`.
-- **Testruns-pagina** (`ui/pages/2_Testruns.py`): template-selector +
+- **Testrun-flow op Home** (`ui/Home.py` + `ui/views/0_Home.py`, voorheen een
+  aparte "Testruns"-pagina): template-selector +
   **één tekstvak "Patiëntdossier"**; extra-context-veld en placeholder-
   inputs vervallen. Verstuur-knop POST't `{template_id, dossier, resume_session}`.
   Analyse-preview met kleurmarkering (ONE_WAY/TWO_WAY/pending); dossier en
   hervat-sessie in `st.session_state` (navigatie tussen pagina's).
-- **Review-queue-pagina** (`ui/pages/3_Review_Queue.py`): hervat-paneel toont
+- **Review-queue-pagina** (`ui/views/3_Review_Queue.py`): hervat-paneel toont
   het body-veld `resume_session: <id>` in plaats van de oude header.
 - **UI-shell** (alle entry-pagina's via `init_pylades_ui()` in
   [ui/ui_extras.py](ui/ui_extras.py)): donker theme
@@ -965,9 +966,10 @@ doen, niet alleen dat we het later doen.
 
 ## 19. Status nu, eerstvolgende stap
 
-**Stappen 1–17 (klaar).** Release **v0.1.2** — scaffold, `shared/`, DB-laag, testdata, volledige
-proxy-pijplijn, alle vijf UI-pagina's, het v0.3 API-contract (§15a) en UI-shell
-(logo/favicon, theme). **170 tests** groen. `uv run pytest`, `uv run ruff check .`
+**Stappen 1–17 (klaar).** Release **v0.2.2** — scaffold, `shared/`, DB-laag, testdata, volledige
+proxy-pijplijn, alle UI-pagina's, het v0.3 API-contract (§15a) en UI-shell
+(logo/favicon, theme). **216 tests** groen (canonieke teststand voor dit document).
+`uv run pytest`, `uv run ruff check .`
 en mypy op `shared/` + `proxy/` zijn schoon. Services:
 `uv run python scripts/pylades_services.py restart`.
 
@@ -1095,8 +1097,8 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   Gedeelde UI-shell: [ui/ui_extras.py](ui/ui_extras.py), [ui/theme.py](ui/theme.py),
   [.streamlit/config.toml](.streamlit/config.toml), logo/favicon (zie §15a UI-shell).
 
-- [x] **Stap 12 — Templates-pagina.**
-  `ui/pages/1_Templates.py` + CRUD-uitbreiding in
+- [x] **Stap 12 — Prompts-pagina** (voorheen "Templates").
+  `ui/views/2_Prompts.py` + CRUD-uitbreiding in
   [proxy/templates.py](proxy/templates.py) (`list_templates`,
   `upsert_template`, `delete_template`) + `resolve_effective_mode_with_source`
   in [proxy/pseudonymization.py](proxy/pseudonymization.py) +
@@ -1109,8 +1111,8 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   *Stap 17 (§15a):* `{input}`-validator, `max_tokens`, toggle `use_llm`,
   Max-tokens-invoerveld, standaard-LLM `claude-opus-4-7`.
 
-- [x] **Stap 13 — Config-pagina.** ✅
-  `ui/pages/5_Config.py` rendert threshold-sliders, generalisering-
+- [x] **Stap 13 — Config-pagina.**
+  `ui/views/5_Config.py` rendert threshold-sliders, generalisering-
   checkboxes, super-default-dropdown met two-way-justification en de
   rotatie-flow met CSV-download. Inhoudelijke logica zit in
   `shared.crypto.rotate_global_secret` (archive + nieuwe 32-byte sleutel,
@@ -1118,8 +1120,8 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   zeven kolommen). Typed-confirmation `ROTEER` (hoofdlettergevoelig)
   staat tussen knop en rotatie. 129 tests groen (2 skips: spaCy).
 
-- [x] **Stap 14 — Review-queue-pagina.** ✅
-  `ui/pages/3_Review_Queue.py` toont sessies met openstaande items
+- [x] **Stap 14 — Review-queue-pagina.**
+  `ui/views/3_Review_Queue.py` toont sessies met openstaande items
   (oudste eerst via `list_sessions_with_pending`), per item een
   context-snippet (5 woorden voor/na via `ui.review_snippet`) en de
   drie acties Accept/Modify/Reject met optionele note. Zodra
@@ -1129,15 +1131,15 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   controleert. 138 tests groen (2 skips: spaCy).
   *Stap 17 (§15a):* hervat-paneel toont body-veld `resume_session: <id>`.
 
-- [x] **Stap 15 — Testruns-pagina.** ✅
-  `ui/pages/2_Testruns.py`: template-selector, één Patiëntdossier-tekstvak,
+- [x] **Stap 15 — Testrun-flow op Home** (voorheen aparte "Testruns"-pagina).
+  `ui/Home.py` + `ui/views/0_Home.py`: template-selector, één Patiëntdossier-tekstvak,
   Analyseer (dry-run, geen vault) + Verstuur (POST `{template_id, dossier,
   resume_session}`), preview-highlighting, sessie-hervat via
   `st.session_state`. [ui/testrun_helpers.py](ui/testrun_helpers.py):
   `fill_input`, `analyze_prompt` met `use_llm=template.use_llm`.
 
-- [x] **Stap 16 — Audit-pagina.** ✅
-  `ui/pages/4_Audit.py` rendert het overzicht (limit-slider +
+- [x] **Stap 16 — Audit-pagina.**
+  `ui/views/4_Audit.py` rendert het overzicht (limit-slider +
   session-filter, status-badge per rij) en een detail-view met vier
   tabs (Origineel, Pseudonimized, Response-pseud, Response-terug).
   Status-prioritering (`error` > `review` > `ok`) en JSON-pretty-print
@@ -1147,16 +1149,16 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
 
 ### v0.3-oplevering
 
-- [x] **Stap 17 — Prompt-template één-placeholder + body-API.** ✅
+- [x] **Stap 17 — Prompt-template één-placeholder + body-API.**
   Ontwerp §15a doorgevoerd. [shared/models.py](shared/models.py):
   `max_tokens`, `use_llm`, `{input}`-validator; [shared/db.py](shared/db.py):
   idempotente ALTERs; [proxy/templates.py](proxy/templates.py): geen
   `default_template()`, CRUD met nieuwe velden; [proxy/main.py](proxy/main.py):
   `MessagesRequest`, server-side `{input}`-substitutie, resume via body;
-  UI-pagina's Templates/Testruns/Review bijgewerkt; [DEMO.md](DEMO.md) +
+  UI-pagina's Prompts/Home/Review bijgewerkt; [DEMO.md](DEMO.md) +
   [README.md](README.md) met nieuwe body-shape. Tests:
   `test_proxy.py`, `test_templates_crud.py`, `test_testrun_helpers.py`.
-  *Klaar:* 174 tests groen; ruff + mypy schoon op `shared/` en `proxy/`.
+  *Klaar:* volledige suite groen; ruff + mypy schoon op `shared/` en `proxy/`.
 
 - [ ] **Praktijktests v0.3-vlag.**
   Uitvoerige end-to-end-runs op een verse DB: de drie scenario's uit
@@ -1166,13 +1168,13 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
 
 ### Oplevering
 
-- [x] **Demo + roadmap.** ✅
+- [x] **Demo + roadmap.**
   Project-tree, testsuite-output en het driedelige demo-script zijn
   vastgelegd in [DEMO.md](DEMO.md) — clean round-trip, manual review,
   en gemengde ONE_WAY/TWO_WAY-overrides. v1.0 roadmap in
   [README.md](README.md) is eind-gecontroleerd en gespiegeld aan de
-  buiten-scope-lijst hieronder. Testsuite-stand (release v0.1.2):
-  **174 passed**. Mypy schoon, ruff schoon.
+  buiten-scope-lijst hieronder. Testsuite-stand (release v0.2.2):
+  volledige suite groen (exact aantal in §19). Mypy schoon, ruff schoon.
 
   Project-tree (broncode-bestanden):
 
@@ -1184,10 +1186,15 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   ├── .streamlit/
   │   ├── config.toml
   │   └── favicon.png
+  ├── CLA.md
+  ├── CONTRIBUTING.md
   ├── DEMO.md
+  ├── LICENSE.md
   ├── PLAN.md
   ├── README.md
   ├── SPEC-v0.3.md
+  ├── STYLE.md
+  ├── SUPPORTERS.md
   ├── pyproject.toml
   ├── scripts/
   │   └── pylades_services.py
@@ -1214,10 +1221,11 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   │   ├── db.py
   │   ├── models.py
   │   └── version.py
-  ├── tests/                       (15 bestanden, 174 tests)
+  ├── tests/                       (testmodules; volledige suite groen)
   │   ├── __init__.py
   │   ├── test_audit.py
   │   ├── test_audit_format.py
+  │   ├── test_cookies.py
   │   ├── test_crypto_rotation.py
   │   ├── test_db_separation.py
   │   ├── test_detection.py
@@ -1225,8 +1233,12 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   │   ├── test_mapping.py
   │   ├── test_proxy.py
   │   ├── test_pseudonymization.py
+  │   ├── test_pylades_services.py
   │   ├── test_review.py
+  │   ├── test_review_queue_page.py
   │   ├── test_review_snippet.py
+  │   ├── test_sidebar_state.py
+  │   ├── test_streamlit_bootstrap.py
   │   ├── test_templates_crud.py
   │   ├── test_testrun_helpers.py
   │   ├── test_ui_status.py
@@ -1239,15 +1251,21 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
       ├── Home.py
       ├── app.py
       ├── audit_format.py
+      ├── cookies.py
       ├── favicon_sync.py
+      ├── navigation.py
+      ├── review_flow.py
+      ├── review_queue_helpers.py
       ├── review_snippet.py
+      ├── sidebar_state.py
       ├── status.py
       ├── testrun_helpers.py
       ├── theme.py
       ├── ui_extras.py
-      └── pages/
-          ├── 1_Templates.py
-          ├── 2_Testruns.py
+      └── views/
+          ├── 0_Home.py
+          ├── 1_Status.py
+          ├── 2_Prompts.py
           ├── 3_Review_Queue.py
           ├── 4_Audit.py
           └── 5_Config.py

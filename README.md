@@ -1,7 +1,7 @@
-# Pylades v0.3.0
+# Pylades v0.2.2
 
 > Lokale pseudonimiseringsproxy voor extern LLM-gebruik in de zorg.
-> **Huidige release:** v0.3.0 · zie [PLAN.md](PLAN.md).
+> **Huidige release:** v0.2.2 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
 > **Pylades** is in de Griekse mythologie de trouwe metgezel van Orestes —
 > een archetype van onvoorwaardelijke vriendschap: een metgezel aan wie je
 > alles toevertrouwt.
@@ -25,9 +25,9 @@ Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
 - `pylades-content.db` — templates, audit_log, sessions, review_queue, config
 - `pylades-vault.db` — pseudoniem ↔ origineel mappings (file-mode `0o600`)
 
-### Upgrade vanaf v0.2.x
+### Upgrade vanaf oudere v0.2.x-installaties
 
-Lokale v0.2.x-installaties gebruikten andere standaardnamen voor de SQLite-databases.
+Vroege v0.2.x-installaties gebruikten andere standaardnamen voor de SQLite-databases.
 Hernoem bestaande bestanden handmatig naar:
 
 - `pylades-content.db`
@@ -39,7 +39,7 @@ Controleer in je projectmap welke `.db`-bestanden nog staan als je templates of 
 
 ## Status
 
-Pylades v0.3.0 is een **proof of concept** op één persoonlijke machine.
+Pylades v0.2.2 is een **proof of concept** op één persoonlijke machine.
 Productie-inzet op echte zorgdata is **niet** toegestaan zonder formele
 FG/DPO-toetsing. Zie [Productie-disclaimer](#productie-disclaimer-verplicht-lezen)
 hieronder.
@@ -48,8 +48,7 @@ hieronder.
 
 ## Wat Pylades doet
 
-Pylades zit **tussen** jouw applicatie (Cursor, Python-script, Claude Desktop)
-en een extern LLM (Anthropic). Voordat tekst het netwerk op gaat:
+Pylades zit **tussen** jouw applicatie en een extern LLM. Voordat tekst het netwerk op gaat:
 
 1. **Detecteert** het persoonsgegevens — regex, spaCy NER, en optioneel een
    lokaal Ollama-model voor jargon en productnamen.
@@ -107,7 +106,7 @@ opslag als die ontbreekt.
 
 ## Productie-disclaimer (verplicht lezen)
 
-Pylades v0.3.0 implementeert 12 specifieke business rules uit een
+Pylades v0.2.2 implementeert 12 specifieke business rules uit een
 zorg-georiënteerde functionele specificatie (richting doelversie v0.3), maar is **niet productie-geschikt
 voor zorgdata**. Ontbrekende productie-vereisten zijn onder andere:
 
@@ -143,8 +142,9 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 
 ## Versie
 
-- **Huidige release:** v0.3.0 — enige bron: [`shared/version.py`](shared/version.py)
+- **Huidige release:** v0.2.2 — enige bron: [`shared/version.py`](shared/version.py)
   (sync met `pyproject.toml`; test: `tests/test_version.py`).
+- **Doelversie:** v0.3 (`TARGET_VERSION` in [`shared/version.py`](shared/version.py)).
 - **Spec v0.3:** [PLAN.md](PLAN.md) en [SPEC-v0.3.md](SPEC-v0.3.md).
 
 ---
@@ -163,7 +163,7 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 | Vault-DB | SQLite (`pylades-vault.db`, mode `0o600`) |
 | LLM-provider | Anthropic (Messages API) |
 | Package manager | [uv](https://docs.astral.sh/uv/) |
-| Tests | pytest (193 tests) |
+| Tests | pytest (volledige suite groen) |
 
 ---
 
@@ -414,13 +414,13 @@ Op de Config-pagina staat een rotatie-flow met vijf stappen:
 
 ## Status project (v0.3-spec)
 
-Wat er nu staat (release v0.3.0):
+Wat er nu staat (release v0.2.2):
 
 - Volledige proxy-pipeline: detect → generalize → pseudonymize → Anthropic →
   de-pseudonymize
 - Streamlit UI: Home (testrun-flow met Eenvoudig/Uitgebreid-modus), Status,
   Prompts, Review-queue, Audit, Config
-- 193 geautomatiseerde tests (`uv run pytest tests/ -v`)
+- Volledige geautomatiseerde testsuite groen (`uv run pytest tests/ -v`)
 - Demo-scenario in [DEMO.md](DEMO.md)
 - Template-vlag `use_llm` om laag 3 (Ollama) per template aan/uit te zetten
 
@@ -513,6 +513,7 @@ Buiten scope van v0.3, expliciet geadresseerd in v1.0:
 
 Welkom. Lees [CONTRIBUTING.md](CONTRIBUTING.md) voor spelregels en workflow.
 Bijdragers aan broncode tekenen de [Contributor License Agreement](CLA.md).
+Optionele gebruikersondersteuning (gratis of betaald) kan via [SUPPORTERS.md](SUPPORTERS.md).
 
 De software is bedoeld voor **niet-commercieel** gebruik (zie licentie).
 Commercieel gebruik vereist aparte afspraken met de oprichters.

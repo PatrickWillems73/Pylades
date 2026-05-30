@@ -1,5 +1,15 @@
 # Pylades — specificatie v0.3
 
+> **Let op — implementatie is op punten geëvolueerd t.o.v. deze spec.**
+> Dit document is de oorspronkelijke v0.3-specificatie. De gebouwde software
+> wijkt op enkele punten af; raadpleeg voor het *definitieve* gedrag steeds
+> [PLAN.md](PLAN.md) (§15a) en [README.md](README.md). Bekende afwijkingen:
+> - UI-pagina's leven in `ui/views/` (entry `ui/Home.py`); "Templates" heet
+>   nu **Prompts** en "Testruns" is opgegaan in de **Home**-pagina, met een
+>   aparte **Status**-pagina.
+> - Het hervat-pad gebruikt het **body-veld `resume_session`** in plaats van
+>   de header `X-Pylades-Resume-Session` (zie PLAN §15a).
+
 ---
 
 ## Wat we bouwen
@@ -33,7 +43,7 @@ Een Nederlandse gebruiker wil prompts met gevoelige data veilig naar een
 extern LLM kunnen sturen zonder dat die data herleidbaar bij de LLM-provider
 terechtkomt.
 
-### ⚠️ Productie-disclaimer (verplicht in README.md)
+### Productie-disclaimer (verplicht in README.md)
 
 Pylades v0.3 implementeert 12 specifieke business rules uit een
 zorg-georiënteerde functionele specificatie, maar is **niet productie-geschikt
@@ -107,7 +117,6 @@ niet tegen diefstal van de audit-database zelf. In v1.0 wordt
 | Database | `sqlite3` (stdlib) | v0.3-eenvoud; twee separate files voor BR-G02 |
 | Settings | `pydantic-settings` v2 | Type-safe `.env`-loading; één bron voor config |
 | Crypto | `hmac`, `hashlib`, `secrets` (stdlib) | HMAC-SHA-256 voor pseudoniemen (BR-C01) |
-| Fuzzy matching | `rapidfuzz` | Voor robuuste de-pseudonimisatie |
 
 **Externe afhankelijkheden die de gebruiker zelf installeert:**
 - `ollama serve` draaiend op `localhost:11434`
@@ -364,10 +373,11 @@ met `{"session_id": ..., "review_url": ...}`.
 
 UI Review Queue:
 - Tabel met pending items, context-snippet (5 woorden vooraf/achterna)
-- Acties: ✓ Accept / ✗ Reject / 🔧 Change type (dropdown)
+- Acties: Accept / Reject / Change type (dropdown)
 - Optionele note
 - Knop "Hervat sessie" als alle items resolved → herhaal call via proxy met
-  header `X-Pylades-Resume-Session: <id>`
+  het body-veld `resume_session: <id>` (verouderd: header
+  `X-Pylades-Resume-Session`; zie PLAN §15a)
 
 **Acceptatiecriterium.** Detectie met confidence onder threshold plaatst entity
 in review_queue met status `PENDING`. UI-actie verandert status; volgende
@@ -859,7 +869,12 @@ class PseudonymManager:
 - `get_recent_logs(limit)`, `get_log_by_id(id)`
 
 ### `proxy/main.py`
-`POST /v1/messages` flow:
+> **Verouderd t.o.v. implementatie.** Het definitieve contract gebruikt een
+> eigen body-shape `{template_id, dossier, resume_session}` met verplichte
+> `template_id` en één `{input}`-placeholder; geen `X-Pylades-*`-headers meer.
+> Zie PLAN §15a voor de gebouwde flow.
+
+`POST /v1/messages` flow (oorspronkelijke spec):
 1. Lees body, extract user-text + template_id uit custom header
    `X-Pylades-Template-Id` (optioneel; zonder template wordt super-default
    gebruikt voor alle entities)
@@ -1029,18 +1044,18 @@ Na elke stap: `uv run pytest tests/ -v` en `uv run ruff check .`
 
 ## Wat NIET te doen
 
-- ❌ Geen Docker, geen docker-compose
-- ❌ Geen authenticatie / login op de UI (v1.0)
-- ❌ Geen encryptie van data-at-rest (v1.0)
-- ❌ Geen async-iterator streaming (v1.0)
-- ❌ Geen React/Vue frontend — Streamlit is de UI
-- ❌ Geen ORM — `sqlite3` direct
-- ❌ Geen LangChain, LlamaIndex
-- ❌ Geen overbodige abstracties
-- ❌ Geen `# TODO` zonder concreet vervolg
-- ❌ Geen unsalted hash, MD5, SHA-1 in pseudoniem-pad
-- ❌ Geen kruisreferenties tussen content.db en vault.db buiten via session_id
-- ❌ Geen LLM-provider-abstractielaag (Anthropic-only; v1.0 maakt agnostiek)
+- Geen Docker, geen docker-compose
+- Geen authenticatie / login op de UI (v1.0)
+- Geen encryptie van data-at-rest (v1.0)
+- Geen async-iterator streaming (v1.0)
+- Geen React/Vue frontend — Streamlit is de UI
+- Geen ORM — `sqlite3` direct
+- Geen LangChain, LlamaIndex
+- Geen overbodige abstracties
+- Geen `# TODO` zonder concreet vervolg
+- Geen unsalted hash, MD5, SHA-1 in pseudoniem-pad
+- Geen kruisreferenties tussen content.db en vault.db buiten via session_id
+- Geen LLM-provider-abstractielaag (Anthropic-only; v1.0 maakt agnostiek)
 
 ---
 

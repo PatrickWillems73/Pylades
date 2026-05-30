@@ -200,7 +200,7 @@ Audit-detail laat exact zien wat er gebeurt:
 - **Response (terug)** — exact dezelfde tekst, maar `[PER-xxxxxx]` is
   terugvertaald naar **Pietersen**; de BSN blijft als pseudoniem staan.
 
-De UI's Testruns-pagina toont in de mapping-tabel de twee entiteiten
+Op **Home** (Uitgebreid) toont de mapping-tabel de twee entiteiten
 met `[2w]` op `NAME` en `[1w]` op `BSN` — bewijs dat de drie-laagse
 resolver de per-entity override correct toepaste boven super-default.
 
@@ -217,4 +217,4 @@ resolver de per-entity override correct toepaste boven super-default.
 | Append-only audit (BR-G01) | alle | Elke call krijgt een nieuwe rij |
 
 Voor automatische verificatie van diezelfde garanties: `uv run pytest
-tests/ -v`. Stand bij oplevering: **193 passed**.
+tests/ -v`. De volledige suite hoort groen te zijn.
