@@ -1,4 +1,4 @@
-"""Pure helpers voor de testrun-flow op de homepagina (Eenvoudig + Uitgebreid).
+"""Pure helpers voor de testrun-flow op de homepagina (Compact + Uitgebreid).
 
 Splitten we doelbewust van `ui/Home.py` af zodat we de logica met `pytest`
 kunnen valideren zonder Streamlit-context. De Streamlit-pagina blijft een
@@ -218,13 +218,13 @@ def reconcile_analysis_for_display(
 
 
 # ---------------------------------------------------------------------------
-# Plain-language helpers voor de Eenvoudig-modus
+# Plain-language helpers voor de Compact-modus
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class LaySummary:
-    """Samenvatting van een testrun in gebruikers-taal (Eenvoudig).
+    """Samenvatting van een testrun in gebruikers-taal (Compact).
 
     Bewust gescheiden velden i.p.v. één voorgeformatteerde zin: de UI
     kiest zelf hoe ze de cijfers en zinnen toont (status-strip, kaart,
@@ -352,9 +352,9 @@ _TYPE_LABELS: dict[str, str] = {
 
 @dataclass(frozen=True, slots=True)
 class ResponseSignals:
-    """Signalen die in Eenvoudig prominent moeten blijven (niet onder expander).
+    """Signalen die in Compact prominent moeten blijven (niet onder expander).
 
-    De Anthropic-JSON verdwijnt achter een expander in Eenvoudig, maar
+    De Anthropic-JSON verdwijnt achter een expander in Compact, maar
     deze velden moeten zichtbaar in beeld blijven omdat ze het verschil
     maken tussen "geslaagd" en "stilletjes mislukt".
     """
@@ -645,7 +645,7 @@ def build_privacy_report_csv(
 
 
 # ---------------------------------------------------------------------------
-# Hulp voor highlight-rendering (gedeeld door Eenvoudig + Uitgebreid)
+# Hulp voor highlight-rendering (gedeeld door Compact + Uitgebreid)
 # ---------------------------------------------------------------------------
 
 

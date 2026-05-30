@@ -4,13 +4,13 @@ version = "0.2.2"
 description = "Lokale pseudonimiserende proxy voor extern LLM-gebruik (release sync: shared/version.py)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "PolyForm Noncommercial License 1.0.0" }
 authors = [{ name = "Pylades Contributors" }]
 keywords = ["pseudonymization", "privacy", "llm", "proxy", "anthropic"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -29,7 +29,6 @@ dependencies = [
     "ollama>=0.4",
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
-    "rapidfuzz>=3.10",
 ]
 
 [project.optional-dependencies]
@@ -97,7 +96,7 @@ no_implicit_reexport = true
 
 [[tool.mypy.overrides]]
 # Externe libraries zonder type stubs: niet zeuren bij imports.
-module = ["spacy", "spacy.*", "ollama", "ollama.*", "rapidfuzz", "rapidfuzz.*", "streamlit", "streamlit.*"]
+module = ["spacy", "spacy.*", "ollama", "ollama.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

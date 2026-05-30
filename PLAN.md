@@ -10,8 +10,9 @@
 ## 1. Wat we bouwen, in één paragraaf
 
 Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.2.2**,
-richting doel **v0.3**) die zich voordoet als
-Anthropic's `/v1/messages`-endpoint, plus een Streamlit-beheer-UI. De proxy
+richting doel **v0.3**) die op het pad `POST /v1/messages` een eigen
+body-contract aanbiedt (zelfde pad als Anthropic, maar geen pass-through),
+plus een Streamlit-beheer-UI. De proxy
 detecteert gevoelige entities in elke prompt, generaliseert wat
 generaliseerbaar is, vervangt de rest door HMAC-pseudoniemen, stuurt de
 opgeschoonde prompt naar Anthropic en — *afhankelijk van de gekozen modus per

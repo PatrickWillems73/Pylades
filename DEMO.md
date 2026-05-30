@@ -37,11 +37,11 @@ status-kaartjes op de **Status**-pagina (menu-optie 2) groen staan
 ontstaan en zien dat de response gewoon terugkomt met pseudoniemen
 op de plek waar de BSN stond.
 
-### Via de UI (Eenvoudig)
+### Via de UI (Compact)
 
 1. Open **Home**. Sinds v0.2.0 is de testrun-pagina de homepagina; het
    statusoverzicht staat onder menu-optie **Status**.
-2. Bovenaan staat een modus-schakelaar: **Eenvoudig** is default,
+2. Bovenaan staat een modus-schakelaar: **Compact** is default,
    **Uitgebreid** toont alle diagnostics (curl, raw upstream-body,
    mapping-tabel, JSON-response).
 3. Kies template id `1` (de seed-template uit `data/fixtures.py` voldoet

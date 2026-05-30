@@ -2,7 +2,7 @@
 
 Sinds v0.2.0 is de testrun-flow de homepagina: hij is voor alle doelgroepen
 het belangrijkste interactiepunt. Een modus-schakelaar bovenaan
-(Eenvoudig / Uitgebreid) bepaalt of we de plain-language-flow tonen
+(Compact / Uitgebreid) bepaalt of we de plain-language-flow tonen
 (samenvattingskaart, entiteit-kaartjes, bewuste tweeklik vóór de echte
 upstream-call) of de huidige diagnostics (mapping-tabel, JSON-response,
 curl-equivalent, raw upstream-body, latency). Onder de motorkap zit één
@@ -230,7 +230,7 @@ def _render_preview_block(text: str, highlights: Iterable[tuple[str, str]] = ())
 
 
 # ---------------------------------------------------------------------------
-# Proxy-call met latency-meting (gedeeld door Eenvoudig + Uitgebreid).
+# Proxy-call met latency-meting (gedeeld door Compact + Uitgebreid).
 # ---------------------------------------------------------------------------
 
 
@@ -321,7 +321,7 @@ mode_choice = st.pills(
     key="testrun_mode_pills",
     label_visibility="collapsed",
     help=(
-        "Vereenvoudigd: gewone taal, één doel per stap. "
+        "Compact: gewone taal, één doel per stap. "
         "Uitgebreid: alle diagnostics."
     ),
 )
@@ -434,7 +434,7 @@ with st.container(border=not is_simple):
 
 
 # ---------------------------------------------------------------------------
-# Knoppen — drie-staps-keten in Eenvoudig, split in Uitgebreid.
+# Knoppen — drie-staps-keten in Compact, split in Uitgebreid.
 # ---------------------------------------------------------------------------
 
 
@@ -519,7 +519,7 @@ st.markdown(
 )
 
 if is_simple:
-    # --- Eenvoudig: drie-staps-keten, max één primaire knop tegelijk -----
+    # --- Compact: drie-staps-keten, max één primaire knop tegelijk -----
     if analysis is None and not session_resolved:
         start_clicked = st.button(
             "Start",

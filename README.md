@@ -13,11 +13,13 @@ geconfigureerd — pseudoniemen terug in het antwoord.
 
 Pylades draait twee processen naast elkaar op `localhost`:
 
-- **FastAPI proxy** op `:8080` — bootst Anthropic's `/v1/messages`-endpoint na
-  en pseudonimiseert prompts vóór verzending naar het externe LLM;
-  de-pseudonimiseert de response voor `TWO_WAY` entities.
+- **FastAPI proxy** op `:8080` — luistert op het pad `POST /v1/messages` met
+  een **eigen body-contract** (`template_id` + `dossier`, geen
+  Anthropic-pass-through), pseudonimiseert prompts vóór verzending naar
+  Anthropic en de-pseudonimiseert de response voor `TWO_WAY` entities. De
+  teruggegeven response blijft Anthropic-vormig.
 - **Streamlit UI** op `:8501` — Home (testrun-flow voor zowel technische
-  als niet-technische gebruikers met Eenvoudig/Uitgebreid-modus), Status,
+  als niet-technische gebruikers met Compact/Uitgebreid-modus), Status,
   Prompts, Review-queue, Audit en Config.
 
 Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
@@ -418,7 +420,7 @@ Wat er nu staat (release v0.2.2):
 
 - Volledige proxy-pipeline: detect → generalize → pseudonymize → Anthropic →
   de-pseudonymize
-- Streamlit UI: Home (testrun-flow met Eenvoudig/Uitgebreid-modus), Status,
+- Streamlit UI: Home (testrun-flow met Compact/Uitgebreid-modus), Status,
   Prompts, Review-queue, Audit, Config
 - Volledige geautomatiseerde testsuite groen (`uv run pytest tests/ -v`)
 - Demo-scenario in [DEMO.md](DEMO.md)
@@ -464,7 +466,7 @@ Conventies:
 
 ```
 [Cursor / Python script / Claude Desktop]
-            │ HTTPS (Anthropic Messages API formaat)
+            │ HTTPS (Pylades body-contract: template_id + dossier)
             ▼
 [FastAPI proxy :8080]
    ├─► Stage 1: DETECT  — regex → spaCy NL → (Ollama, optioneel)
@@ -478,7 +480,7 @@ Conventies:
    └─► Audit-log volledig request+response in content.db
 
 [Streamlit UI :8501]
-   ├─► Home            (testrun-flow; Eenvoudig + Uitgebreid)
+   ├─► Home            (testrun-flow; Compact + Uitgebreid)
    ├─► Status          (proxy/Ollama/spaCy/DB-health)
    ├─► Prompts       (per-EntityType modus-override)
    ├─► Review-queue    (manual review)

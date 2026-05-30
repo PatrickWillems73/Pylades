@@ -1,5 +1,5 @@
 ---
-description: Pylades UI — kleur-status-logica voor linkerranden en feedback (Eenvoudig + Status)
+description: Pylades UI — kleur-status-logica voor linkerranden en feedback (Compact + Status)
 alwaysApply: true
 ---
 
@@ -22,7 +22,7 @@ Implementatie: [`ui/theme.py`](ui/theme.py) (constanten + CSS) + helpers in [`ui
 | Pending / aandacht | `#D4A017` | Wacht op beoordeling, HTTP 423, inline-status dot |
 | Fout | `#A0263A` | Proxy/HTTP-fout (niet merk-accent) |
 
-## Entiteit-rijen (Eenvoudig, `.pylades-soft-panel`)
+## Entiteit-rijen (Compact, `.pylades-soft-panel`)
 
 | Status | Modus | Linkerrand |
 | --- | --- | --- |
@@ -30,11 +30,11 @@ Implementatie: [`ui/theme.py`](ui/theme.py) (constanten + CSS) + helpers in [`ui
 | Beschermd | TWO_WAY — verborgen én terug vertaald in antwoord | **Blauw** `#256F8A` |
 | Actie nodig | Pending — wacht op jouw beoordeling | **Geel/amber** `#D4A017` |
 
-## Pending-melding (Eenvoudig, `.pylades-notice--attention`)
+## Pending-melding (Compact, `.pylades-notice--attention`)
 
 Twijfeltekst boven de review-knop (`attention_notice` in `ui/ui_extras.py`): geel/amber achtergrond + linkerrand, warm gele tekst — zelfde semantiek als *Wacht op jouw beoordeling*.
 
-## Samenvattingsstrip (Eenvoudig, `.pylades-accent-strip`)
+## Samenvattingsstrip (Compact, `.pylades-accent-strip`)
 
 | Klasse | Wanneer | Linkerrand |
 | --- | --- | --- |
@@ -42,11 +42,11 @@ Twijfeltekst boven de review-knop (`attention_notice` in `ui/ui_extras.py`): gee
 | `--attention` | Pending review-items of HTTP 423 | **Geel/amber** `#D4A017` |
 | `--error` | Geen proxy-verbinding, HTTP 4xx/5xx (≠ 423) | **Rood** `#A0263A` |
 
-## LLM-antwoord (Eenvoudig, `.pylades-llm-response`)
+## LLM-antwoord (Compact, `.pylades-llm-response`)
 
 Groene linkerrand `#2E7D32` — antwoord succesvol ontvangen (HTTP 200 met tekst).
 
-## Preview-arcering (Eenvoudig + Uitgebreid)
+## Preview-arcering (Compact + Uitgebreid)
 
 Placeholders en pending originals in “Wat het externe LLM zou zien” gebruiken dezelfde statuskleuren als entiteit-rijen: `HIGHLIGHT_*` in `ui/theme.py` leidt rgba-arcering af van `STATUS_*` (alpha 0.50) via `pseudonymized_highlights()`.
 

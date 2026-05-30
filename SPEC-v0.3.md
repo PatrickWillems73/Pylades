@@ -29,8 +29,9 @@ Pylades zaken intern die niet naar buiten horen.
 Twee processen die naast elkaar draaien op `localhost`, met twee gescheiden
 SQLite-databases voor defense-in-depth tegen runtime-exfiltratie.
 
-1. **FastAPI proxy** op `localhost:8080` — bootst Anthropic's `/v1/messages`
-   endpoint na, pseudonimiseert/de-pseudonimiseert.
+1. **FastAPI proxy** op `localhost:8080` — luistert op het pad
+   `POST /v1/messages` met een eigen body-contract (geen Anthropic-pass-through),
+   pseudonimiseert/de-pseudonimiseert en stuurt upstream naar Anthropic.
 2. **Streamlit UI** op `localhost:8501` — beheer van prompt-templates,
    testruns met side-by-side view, manual review queue, audit log, configuratie.
 
@@ -182,7 +183,7 @@ pylades/
 
 ```
 [Cursor / Python script / Claude Desktop]
-            │ HTTPS (Anthropic Messages API formaat)
+            │ HTTPS (Pylades body-contract: template_id + dossier)
             ▼
 [FastAPI proxy :8080]
    │

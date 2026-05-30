@@ -15,7 +15,14 @@ from typing import Final
 from shared.config import settings
 from shared.crypto import derive_session_key, load_or_create_secret, make_pseudonym
 from shared.db import get_vault_connection
-from shared.models import ENTITY_CATEGORY_MAP, Entity, PseudonymizationMode
+from shared.models import (
+    ENTITY_CATEGORY_MAP,
+    DetectionLayer,
+    Entity,
+    EntityCategory,
+    EntityType,
+    PseudonymizationMode,
+)
 
 _CSV_COLUMNS: Final[tuple[str, ...]] = (
     "session_id",
@@ -175,8 +182,6 @@ def export_mappings_csv() -> str:
 
 def list_entities_for_session(session_id: str) -> list[Entity]:
     """Lees opgeslagen mappings voor één sessie als `Entity`-lijst (UI/audit-sync)."""
-    from shared.models import DetectionLayer, EntityCategory, EntityType
-
     with get_vault_connection() as conn:
         rows = conn.execute(
             """SELECT original, pseudonym, entity_type, entity_category,

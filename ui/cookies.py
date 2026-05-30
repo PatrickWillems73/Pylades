@@ -13,9 +13,9 @@ import streamlit.components.v1 as components
 MODE_COOKIE_NAME = "pylades_testrun_mode"
 MODE_QUERY_PARAM = "testrun_mode"
 MODE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1 jaar
-MODE_SIMPLIFIED = "Vereenvoudigd"
+MODE_SIMPLIFIED = "Compact"
 MODE_EXTENDED = "Uitgebreid"
-_LEGACY_MODE_ALIASES = {"Eenvoudig": MODE_SIMPLIFIED}
+_LEGACY_MODE_ALIASES = {"Eenvoudig": MODE_SIMPLIFIED, "Vereenvoudigd": MODE_SIMPLIFIED}
 VALID_TESTRUN_MODES = frozenset({MODE_SIMPLIFIED, MODE_EXTENDED})
 _COOKIE_HYDRATED_KEY = "_testrun_mode_cookie_hydrated"
 _COOKIE_BOOTSTRAP_KEY = "_testrun_mode_cookie_bootstrap_done"
@@ -24,7 +24,7 @@ _COOKIE_PERSISTED_KEY = "_testrun_mode_cookie_persisted"
 _COOKIE_BOOTSTRAP_JS = f"""
 <script>
 (function () {{
-    const legacy = {{"Eenvoudig": {MODE_SIMPLIFIED!r}}};
+    const legacy = {{"Eenvoudig": {MODE_SIMPLIFIED!r}, "Vereenvoudigd": {MODE_SIMPLIFIED!r}}};
     const valid = new Set([{MODE_SIMPLIFIED!r}, {MODE_EXTENDED!r}]);
     const name = {MODE_COOKIE_NAME!r};
     const prefix = name + "=";

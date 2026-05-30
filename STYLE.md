@@ -16,7 +16,7 @@ Zie ook [CONTRIBUTING.md](CONTRIBUTING.md) voor het bijdrageproces.
 | README, PLAN, DEMO, CONTRIBUTING | **Nederlands** | Doelgroep: zorg + tech in NL |
 | Commit messages | **Engels of Nederlands** | Kort, actief, waarom centraal |
 
-**Toon in UI:** direct en geruststellend voor niet-technische gebruikers. Geen jargon zonder uitleg in Eenvoudig-modus. In Uitgebreid-modus mag technische detail wel.
+**Toon in UI:** direct en geruststellend voor niet-technische gebruikers. Geen jargon zonder uitleg in Compact-modus. In Uitgebreid-modus mag technische detail wel.
 
 **Toon in code-review:** respectvol, concreet. Vraag om verduidelijking in plaats van aannames.
 
@@ -103,7 +103,7 @@ Zie [.gitignore](.gitignore): `*.db`, `secrets/*`, `.env`, `logs/`.
 
 ### Modi
 
-- **Eenvoudig** — plain language, samenvattingsstrip, entiteit-kaartjes, bewuste bevestiging vóór upstream
+- **Compact** — plain language, samenvattingsstrip, entiteit-kaartjes, bewuste bevestiging vóór upstream
 - **Uitgebreid** — diagnostics, JSON, mapping-tabel, curl-equivalent
 
 Eén gedeelde pijplijn; alleen presentatie verschilt. Logica hoort in helpers (`ui/testrun_helpers.py`, `ui/review_flow.py`), niet gedupliceerd in views.

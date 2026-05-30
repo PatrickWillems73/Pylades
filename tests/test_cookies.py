@@ -14,6 +14,10 @@ def test_normalize_testrun_mode_maps_legacy_eenvoudig() -> None:
     assert normalize_testrun_mode("Eenvoudig") == MODE_SIMPLIFIED
 
 
+def test_normalize_testrun_mode_maps_legacy_vereenvoudigd() -> None:
+    assert normalize_testrun_mode("Vereenvoudigd") == MODE_SIMPLIFIED
+
+
 def test_normalize_testrun_mode_falls_back_to_default() -> None:
     assert normalize_testrun_mode(None) == MODE_SIMPLIFIED
     assert normalize_testrun_mode("") == MODE_SIMPLIFIED
