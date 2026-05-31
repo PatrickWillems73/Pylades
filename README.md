@@ -529,6 +529,11 @@ Copyright (c) 2026 Siebrand Zoethout en Patrick Willems.
 Deze software wordt vrijgegeven onder de **PolyForm Noncommercial License
 1.0.0**. Zie [LICENSE.md](LICENSE.md) voor de volledige tekst.
 
+De broncode is openbaar en vrij te gebruiken voor niet-commerciële
+doeleinden — *source-available*, dus geen "open source" in de zin van de
+[Open Source Definition](https://opensource.org/osd) (die commercieel gebruik
+niet mag beperken).
+
 ---
 
 ## Oprichters

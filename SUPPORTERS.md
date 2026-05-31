@@ -1,6 +1,6 @@
 # Ondersteuning voor gebruikers
 
-Pylades is vrij te downloaden en te gebruiken onder de [PolyForm Noncommercial License](LICENSE.md). De software zelf krijg je zonder vergoeding; **gebruikersondersteuning** (installatie, training, templates, privacy-vragen) kan apart worden aangeboden — gratis of tegen vergoeding — door mensen en organisaties uit de community.
+Pylades is vrij te downloaden en te gebruiken onder de [PolyForm Noncommercial License](LICENSE.md): de broncode is openbaar en vrij voor niet-commerciële doeleinden (*source-available*, geen "open source" in OSI-zin). De software zelf krijg je zonder vergoeding; **gebruikersondersteuning** (installatie, training, templates, privacy-vragen) kan apart worden aangeboden — gratis of tegen vergoeding — door mensen en organisaties uit de community.
 
 Deze pagina is een **vrijwillige gids**, geen marktplaats met garanties. Vermelding hier betekent niet dat de projectbeheerders iemand aanbevelen of aansprakelijk stellen voor diens diensten.
 
@@ -64,7 +64,7 @@ Typische vormen:
 
 | Kanaal | Doel |
 | --- | --- |
-| **GitHub Issues** | Bugs, ideeën, vragen over de open-source software |
+| **GitHub Issues** | Bugs, ideeën, vragen over de software (broncode openbaar, niet-commercieel) |
 | **Pull requests** | Code, docs, templates, fictieve testdata |
 | **Ondersteuners (deze lijst)** | Optionele, vaak persoonlijke hulp bij adoptie — gratis of betaald |
 
