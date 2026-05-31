@@ -24,7 +24,7 @@ uv run uvicorn proxy.main:app --port 8080
 uv run streamlit run ui/Home.py
 ```
 
-Open <http://localhost:8501> in een browser. Sinds v0.2.0 land je
+Open <http://localhost:8501> in een browser. Je landt
 direct op de testrun-pagina (Home). Controleer dat alle vier
 status-kaartjes op de **Status**-pagina (menu-optie 2) groen staan
 (proxy, Ollama-optioneel, spaCy, databases).
@@ -39,7 +39,7 @@ op de plek waar de BSN stond.
 
 ### Via de UI (Compact)
 
-1. Open **Home**. Sinds v0.2.0 is de testrun-pagina de homepagina; het
+1. Open **Home**. De testrun-pagina is de homepagina; het
    statusoverzicht staat onder menu-optie **Status**.
 2. Bovenaan staat een modus-schakelaar: **Compact** is default,
    **Uitgebreid** toont alle diagnostics (curl, raw upstream-body,

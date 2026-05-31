@@ -27,16 +27,6 @@ Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
 - `pylades-content.db` — templates, audit_log, sessions, review_queue, config
 - `pylades-vault.db` — pseudoniem ↔ origineel mappings (file-mode `0o600`)
 
-### Upgrade vanaf oudere v0.2.x-installaties
-
-Vroege v0.2.x-installaties gebruikten andere standaardnamen voor de SQLite-databases.
-Hernoem bestaande bestanden handmatig naar:
-
-- `pylades-content.db`
-- `pylades-vault.db`
-
-Controleer in je projectmap welke `.db`-bestanden nog staan als je templates of audit-data mist na de upgrade.
-
 ---
 
 ## Status

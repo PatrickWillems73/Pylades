@@ -362,8 +362,7 @@ parsen.
 
 **Waarom `str`.** SQLite kent geen UUID-type, dus elke schrijfactie zou
 serialiseren. Bovendien geven we de session_id als body-veld door naar
-clients (`resume_session` — zie §15a; pre-release v0.0.8 gebruikte nog de
-header `X-Pylades-Resume-Session`) en in JSON-responses; daar is hij toch al
+clients (`resume_session` — zie §15a) en in JSON-responses; daar is hij toch al
 string.
 Eén canonical representatie spaart een type-conversielaag.
 
@@ -473,8 +472,7 @@ semantisch het dichtste bij "deze sessie is geblokkeerd in afwachting van
 een handmatige beslissing". 400 zou wijzen op malformed input; 409 op een
 versie-conflict; 202 op een achtergrondtaak waarvan we het resultaat later
 pollen — niet wat hier gebeurt. De client krijgt `{session_id, review_url}`
-zodat het hervat-pad (body-veld `resume_session: <id>` — zie §15a;
-pre-release v0.0.8 gebruikte nog de header `X-Pylades-Resume-Session`)
+zodat het hervat-pad (body-veld `resume_session: <id>` — zie §15a)
 klaarstaat.
 
 ---
@@ -707,8 +705,7 @@ review-blocks kunnen produceren), Testruns vierde, Audit vijfde.
 
 ## 15a. v0.3-oplevering — Prompt-template één-placeholder + body-API
 
-> Status: **geïmplementeerd** (stap 17, zie §20). Pre-release **v0.0.8** leverde
-> stappen 1–16; stap 17 rondt het v0.3-contract af. **Nog open voor de v0.3-vlag:**
+> Status: **geïmplementeerd** (stap 17, zie §20). **Nog open voor de v0.3-vlag:**
 > uitvoerige praktijktests met de eerste drie beproefde use cases (zie §19).
 > Deze sectie beschrijft het definitieve `POST /v1/messages`-contract (eigen
 > body-shape, verplichte `template_id`, één `{input}`-placeholder).
