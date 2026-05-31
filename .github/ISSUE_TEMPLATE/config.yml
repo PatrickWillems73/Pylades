@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vraag of discussie
+    url: https://github.com/PatrickWillems73/Pylades/discussions
+    about: Stel een vraag of bespreek een idee in Discussions in plaats van een issue.
+  - name: Beveiligingsmelding (privé)
+    url: https://github.com/PatrickWillems73/Pylades/security/advisories/new
+    about: Meld een kwetsbaarheid vertrouwelijk via private vulnerability reporting (zie SECURITY.md).
