@@ -703,7 +703,7 @@ review-blocks kunnen produceren), Testruns vierde, Audit vijfde.
 
 ---
 
-## 15a. v0.3-oplevering — Prompt-template één-placeholder + body-API
+## 15a. v0.3-oplevering — Opdracht-template één-placeholder + body-API
 
 > Status: **geïmplementeerd** (stap 17, zie §20). **Nog open voor de v0.3-vlag:**
 > uitvoerige praktijktests met de eerste drie beproefde use cases (zie §19).
@@ -818,7 +818,7 @@ dan een mix van body + `Header(...)`-parameters.
 
 ### UI
 
-- **Prompts-pagina** (`ui/views/2_Prompts.py`, voorheen "Templates"): numeriek veld
+- **Opdrachten-pagina** (`ui/views/2_Opdrachten.py`, voorheen "Templates"): numeriek veld
   **Max tokens** (default 16 000), toggle **Ollama-detectie (laag 3)** voor
   `use_llm`. Caption + validator-feedback verwijzen naar verplichte `{input}`.
 - **Testrun-flow op Home** (`ui/Home.py` + `ui/views/0_Home.py`, voorheen een
@@ -1095,8 +1095,8 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   Gedeelde UI-shell: [ui/ui_extras.py](ui/ui_extras.py), [ui/theme.py](ui/theme.py),
   [.streamlit/config.toml](.streamlit/config.toml), logo/favicon (zie §15a UI-shell).
 
-- [x] **Stap 12 — Prompts-pagina** (voorheen "Templates").
-  `ui/views/2_Prompts.py` + CRUD-uitbreiding in
+- [x] **Stap 12 — Opdrachten-pagina** (voorheen "Templates").
+  `ui/views/2_Opdrachten.py` + CRUD-uitbreiding in
   [proxy/templates.py](proxy/templates.py) (`list_templates`,
   `upsert_template`, `delete_template`) + `resolve_effective_mode_with_source`
   in [proxy/pseudonymization.py](proxy/pseudonymization.py) +
@@ -1147,13 +1147,13 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
 
 ### v0.3-oplevering
 
-- [x] **Stap 17 — Prompt-template één-placeholder + body-API.**
+- [x] **Stap 17 — Opdracht-template één-placeholder + body-API.**
   Ontwerp §15a doorgevoerd. [shared/models.py](shared/models.py):
   `max_tokens`, `use_llm`, `{input}`-validator; [shared/db.py](shared/db.py):
   idempotente ALTERs; [proxy/templates.py](proxy/templates.py): geen
   `default_template()`, CRUD met nieuwe velden; [proxy/main.py](proxy/main.py):
   `MessagesRequest`, server-side `{input}`-substitutie, resume via body;
-  UI-pagina's Prompts/Home/Review bijgewerkt; [DEMO.md](DEMO.md) +
+  UI-pagina's Opdrachten/Home/Review bijgewerkt; [DEMO.md](DEMO.md) +
   [README.md](README.md) met nieuwe body-shape. Tests:
   `test_proxy.py`, `test_templates_crud.py`, `test_testrun_helpers.py`.
   *Klaar:* volledige suite groen; ruff + mypy schoon op `shared/` en `proxy/`.
@@ -1263,7 +1263,7 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
       └── views/
           ├── 0_Home.py
           ├── 1_Status.py
-          ├── 2_Prompts.py
+          ├── 2_Opdrachten.py
           ├── 3_Review_Queue.py
           ├── 4_Audit.py
           └── 5_Config.py

@@ -302,7 +302,7 @@ with st.sidebar:
     if OPTION_MENU_AVAILABLE:
         option_menu(
             menu_title="Pylades",
-            options=["Home", "Status", "Prompts", "Review", "Audit", "Config"],
+            options=["Home", "Status", "Opdrachten", "Review", "Audit", "Config"],
             icons=["house", "card-list", "flask", "hourglass-split", "bar-chart", "gear"],
             menu_icon="droplet-half",
             default_index=0,

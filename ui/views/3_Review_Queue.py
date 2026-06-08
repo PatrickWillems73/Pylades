@@ -4,7 +4,7 @@ Per pending entiteit: context-snippet (5 woorden voor/na), accept/modify/
 reject met optionele note. Zodra alle items in de sessie resolved zijn,
 toont de pagina een "Hervat sessie"-paneel met het `resume_session`-body-
 veld dat de client moet meesturen — de UI doet zelf geen proxy-call, de
-gebruiker behoudt controle over zijn oorspronkelijke prompt.
+gebruiker behoudt controle over zijn oorspronkelijke opdracht.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ _ACTIVE_SESSION_KEY = "review_active_session"
 st.title("Review-queue")
 st.caption(
     "Items met confidence onder de threshold of een rare-ICD-flag wachten hier "
-    "op een menselijke beslissing voordat de prompt verder mag (BR-A04)."
+    "op een menselijke beslissing voordat de opdracht verder mag (BR-A04)."
 )
 
 # ---------------------------------------------------------------------------

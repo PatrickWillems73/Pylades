@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PAGE_SCRIPTS = (
     ROOT / "ui" / "views" / "0_Home.py",
     ROOT / "ui" / "views" / "1_Status.py",
-    ROOT / "ui" / "views" / "2_Prompts.py",
+    ROOT / "ui" / "views" / "2_Opdrachten.py",
     ROOT / "ui" / "views" / "3_Review_Queue.py",
     ROOT / "ui" / "views" / "4_Audit.py",
     ROOT / "ui" / "views" / "5_Config.py",

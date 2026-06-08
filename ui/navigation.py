@@ -12,7 +12,7 @@ _PAGES = _UI / "views"
 PYLADES_PAGES: list[st.Page] = [
     st.Page(_PAGES / "0_Home.py", title="Home", default=True, url_path=""),
     st.Page(_PAGES / "1_Status.py", title="Status", url_path="Status"),
-    st.Page(_PAGES / "2_Prompts.py", title="Prompts", url_path="Prompts"),
+    st.Page(_PAGES / "2_Opdrachten.py", title="Opdrachten", url_path="Opdrachten"),
     st.Page(
         _PAGES / "3_Review_Queue.py",
         title="Review Queue",

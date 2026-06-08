@@ -60,3 +60,8 @@ logs/
 
 # --- spaCy / Ollama caches (lokaal, niet versie-beheerd) --------------------
 .spacy/
+
+# --- Eval-harnas (TESTPLAN.md) ----------------------------------------------
+# Rapporten zijn run-output (niet versie-beheerd); de gepinde datasets +
+# manifests committen we juist wel als reproduceerbare ground truth.
+eval/reports/

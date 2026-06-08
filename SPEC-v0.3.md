@@ -5,7 +5,7 @@
 > wijkt op enkele punten af; raadpleeg voor het *definitieve* gedrag steeds
 > [PLAN.md](PLAN.md) (§15a) en [README.md](README.md). Bekende afwijkingen:
 > - UI-pagina's leven in `ui/views/` (entry `ui/Home.py`); "Templates" heet
->   nu **Prompts** en "Testruns" is opgegaan in de **Home**-pagina, met een
+>   nu **Opdrachten** en "Testruns" is opgegaan in de **Home**-pagina, met een
 >   aparte **Status**-pagina.
 > - Het hervat-pad gebruikt het **body-veld `resume_session`** in plaats van
 >   de header `X-Pylades-Resume-Session` (zie PLAN §15a).
@@ -14,7 +14,7 @@
 
 ## Wat we bouwen
 
-**Pylades** — een lokale tool die prompts pseudonimiseert vóór verzending naar
+**Pylades** — een lokale tool die opdrachten pseudonimiseert vóór verzending naar
 een extern LLM en de response (afhankelijk van modus) de-pseudonimiseert bij
 terugkomst. Naam is hommage aan trappistenbier; net als de monniken houdt
 Pylades zaken intern die niet naar buiten horen.
@@ -32,7 +32,7 @@ SQLite-databases voor defense-in-depth tegen runtime-exfiltratie.
 1. **FastAPI proxy** op `localhost:8080` — luistert op het pad
    `POST /v1/messages` met een eigen body-contract (geen Anthropic-pass-through),
    pseudonimiseert/de-pseudonimiseert en stuurt upstream naar Anthropic.
-2. **Streamlit UI** op `localhost:8501` — beheer van prompt-templates,
+2. **Streamlit UI** op `localhost:8501` — beheer van opdracht-templates,
    testruns met side-by-side view, manual review queue, audit log, configuratie.
 
 Twee SQLite-databases (zie BR-G02):
@@ -40,7 +40,7 @@ Twee SQLite-databases (zie BR-G02):
 - `pylades-vault.db` — mappings (pseudoniem ↔ original)
 
 ### Use case
-Een Nederlandse gebruiker wil prompts met gevoelige data veilig naar een
+Een Nederlandse gebruiker wil opdrachten met gevoelige data veilig naar een
 extern LLM kunnen sturen zonder dat die data herleidbaar bij de LLM-provider
 terechtkomt.
 

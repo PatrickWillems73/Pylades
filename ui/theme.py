@@ -181,6 +181,23 @@ def _build_css() -> str:
     box-shadow: 0 4px 12px rgba(249, 115, 21, 0.18);
   }}
 
+  /* Tertiary = link-stijl: grijs, onderstreept, geen knop-chrome. */
+  .stButton > button[kind="tertiary"],
+  .stButton > button[data-testid*="tertiary"] {{
+    color: rgba(232, 230, 225, 0.5) !important;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 400;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }}
+  .stButton > button[kind="tertiary"]:hover,
+  .stButton > button[data-testid*="tertiary"]:hover {{
+    color: rgba(232, 230, 225, 0.82) !important;
+    transform: none;
+    box-shadow: none;
+  }}
+
   pre, code {{ border-radius: 8px !important; }}
 
   div[data-testid="stVerticalBlockBorderWrapper"] {{
@@ -236,14 +253,117 @@ def _build_css() -> str:
     font-weight: 600;
   }}
 
-  .pylades-llm-response {{
-    background: rgba(255, 255, 255, 0.04);
-    padding: 1rem;
+  .pylades-llm-response-panel {{
+    margin-bottom: 0.75rem;
     border-radius: 0.5rem;
-    white-space: pre-wrap;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+    border-left: 3px solid {STATUS_GREEN};
+  }}
+  .pylades-llm-response-panel--accent {{
+    border-left-width: 10px;
+    background: {STATUS_GREEN}33;
+    box-shadow: 0 0 0 2px {STATUS_GREEN}B3, 0 10px 30px rgba(0, 0, 0, 0.42);
+  }}
+  .pylades-llm-response-panel--accent .pylades-llm-response-panel__header {{
+    padding-top: 0.8rem;
+  }}
+  .pylades-llm-response-panel__header {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem 0.35rem;
+  }}
+  .pylades-llm-response-panel__header .pylades-section-title {{
+    margin: 0;
+  }}
+  .pylades-copy-btn {{
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: rgba(232, 230, 225, 0.5);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-size: 0.85rem;
+    font-weight: 400;
+    cursor: pointer;
+    padding: 0.15rem 0.25rem;
+    font-family: inherit;
+  }}
+  .pylades-copy-btn:hover {{
+    color: rgba(232, 230, 225, 0.82);
+  }}
+  .pylades-copy-btn--done {{
+    color: {STATUS_GREEN};
+    text-decoration: none;
+  }}
+  .pylades-llm-response {{
+    background: transparent;
+    padding: 0.35rem 1rem 1rem;
+    border-radius: 0;
     word-break: break-word;
     line-height: 1.5;
-    border-left: 3px solid {STATUS_GREEN};
+    border-left: none;
+  }}
+  .pylades-llm-response-panel .pylades-llm-response {{
+    margin: 0;
+  }}
+  .pylades-llm-response h1,
+  .pylades-llm-response h2,
+  .pylades-llm-response h3,
+  .pylades-llm-response h4 {{
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0.65rem 0 0.25rem 0;
+    line-height: 1.3;
+  }}
+  .pylades-llm-response h1 {{
+    font-size: 1.15rem;
+  }}
+  .pylades-llm-response h2 {{
+    font-size: 1.05rem;
+  }}
+  .pylades-llm-response h3,
+  .pylades-llm-response h4 {{
+    font-size: 0.98rem;
+  }}
+  .pylades-llm-response h1:first-child,
+  .pylades-llm-response h2:first-child,
+  .pylades-llm-response h3:first-child {{
+    margin-top: 0;
+  }}
+  .pylades-llm-response p {{
+    margin: 0.25rem 0;
+  }}
+  .pylades-llm-response li > p {{
+    margin: 0;
+  }}
+  .pylades-llm-response ul,
+  .pylades-llm-response ol {{
+    margin: 0.2rem 0 0.35rem 0;
+    padding-left: 1.35rem;
+  }}
+  .pylades-llm-response li {{
+    margin: 0.1rem 0;
+  }}
+  .pylades-llm-response ul + ul,
+  .pylades-llm-response ol + ol {{
+    margin-top: 0.15rem;
+  }}
+  .pylades-llm-response strong {{
+    font-weight: 600;
+  }}
+  .pylades-llm-response a {{
+    color: rgba(232, 230, 225, 0.85);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }}
+  .pylades-llm-response code {{
+    font-size: 0.88em;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
   }}
 
   .pylades-section-title {{
@@ -274,6 +394,89 @@ def _build_css() -> str:
   @keyframes pylades-status-pulse {{
     0%, 100% {{ opacity: 0.35; transform: scale(0.92); }}
     50% {{ opacity: 1; transform: scale(1); }}
+  }}
+
+  .pylades-progress {{
+    background: rgba(23, 26, 33, 0.55);
+    border-radius: 10px;
+    border: 1px solid rgba(42, 47, 58, 0.55);
+    padding: 0.85rem 1rem;
+    margin: 0.5rem 0 1rem 0;
+  }}
+  .pylades-progress__title {{
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    opacity: 0.92;
+    margin-bottom: 0.5rem;
+  }}
+  .pylades-progress__list {{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }}
+  .pylades-progress__row {{
+    display: grid;
+    grid-template-columns: 4rem 1fr auto;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    border-left: 3px solid rgba(42, 47, 58, 0.8);
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }}
+  .pylades-progress__row:last-child {{ margin-bottom: 0; }}
+  .pylades-progress__step {{
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.55;
+  }}
+  .pylades-progress__label {{
+    color: rgba(232, 230, 225, 0.92);
+  }}
+  .pylades-progress__status {{
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    opacity: 0.9;
+  }}
+  .pylades-progress__row--done {{
+    border-left-color: {STATUS_GREEN};
+  }}
+  .pylades-progress__row--done .pylades-progress__status {{
+    color: {STATUS_GREEN};
+  }}
+  .pylades-progress__row--running {{
+    border-left-color: {STATUS_YELLOW};
+    background: rgba({_y_r}, {_y_g}, {_y_b}, 0.10);
+  }}
+  .pylades-progress__row--running .pylades-progress__status {{
+    color: {STATUS_YELLOW};
+  }}
+  .pylades-progress__row--running .pylades-progress__status::before {{
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.4rem;
+    border-radius: 50%;
+    background: {STATUS_YELLOW};
+    animation: pylades-status-pulse 1s ease-in-out infinite;
+  }}
+  .pylades-progress__row--unavailable {{
+    border-left-color: {STATUS_ERROR};
+  }}
+  .pylades-progress__row--unavailable .pylades-progress__status {{
+    color: {STATUS_ERROR};
+  }}
+  .pylades-progress__row--disabled .pylades-progress__label,
+  .pylades-progress__row--disabled .pylades-progress__status,
+  .pylades-progress__row--pending .pylades-progress__label,
+  .pylades-progress__row--pending .pylades-progress__status {{
+    opacity: 0.5;
   }}
 
   footer {{ visibility: hidden; }}

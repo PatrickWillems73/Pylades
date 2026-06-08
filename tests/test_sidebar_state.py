@@ -26,7 +26,7 @@ def test_navigation_module_defines_all_pages() -> None:
     for name in (
         "0_Home.py",
         "1_Status.py",
-        "2_Prompts.py",
+        "2_Opdrachten.py",
         "3_Review_Queue.py",
         "4_Audit.py",
         "5_Config.py",

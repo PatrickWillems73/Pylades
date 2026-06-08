@@ -12,9 +12,9 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 echo "Pylades — services herstarten…"
-uv run python scripts/pylades_services.py restart
+uv run --no-sync python scripts/pylades_services.py restart
 
-UI_PORT="$(uv run python -c "from shared.config import settings; print(settings.ui_port)")"
+UI_PORT="$(uv run --no-sync python -c "from shared.config import settings; print(settings.ui_port)")"
 APP_URL="http://127.0.0.1:${UI_PORT}"
 HEALTH_URL="${APP_URL}/_stcore/health"
 

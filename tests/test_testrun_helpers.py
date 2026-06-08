@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from proxy.detection import LayerStatus, LayerTiming
 from proxy.mapping import export_mappings_csv
 from proxy.review import decide, enqueue, get_pending
 from shared.config import settings
@@ -21,18 +22,30 @@ from shared.models import (
 from ui.testrun_helpers import (
     AnalysisResult,
     PrivacyReportContext,
+    ProgressStep,
+    RunPhase,
+    StepStatus,
+    accent_strip_class_for_run_phase,
+    analysis_caption_for_run_phase,
     analyze_prompt,
+    analyze_prompt_timed,
     build_privacy_report_csv,
     build_privacy_report_md,
+    compute_run_phase,
+    external_step_from_response,
     extract_assistant_text,
     fill_input,
     format_curl_equivalent,
+    format_duration_ms,
     highlight_pairs,
     lay_explanation,
+    progress_panel_html,
+    progress_steps,
     pseudonymized_highlights,
     reconcile_analysis_for_display,
     response_signals,
     summarize_for_lay_user,
+    with_external_step,
 )
 
 
@@ -112,6 +125,113 @@ def test_analyze_prompt_returns_pending_when_confidence_low(pylades_env: None) -
     result = analyze_prompt(template, "Voorbeeld zonder rare data.")
     assert isinstance(result.entities, list)
     assert isinstance(result.pending_review, list)
+
+
+def test_analyze_prompt_timed_returns_layer_timings(pylades_env: None) -> None:
+    template = _basic_template()
+    result, timings = analyze_prompt_timed(template, "BSN 123456782.")
+    assert isinstance(result, AnalysisResult)
+    # Drie detectielagen, laag 3 (LLM) uit omdat use_llm=False.
+    assert [t.layer.value for t in timings] == ["regex", "spacy", "llm"]
+    assert timings[-1].status is LayerStatus.DISABLED
+
+
+# ---------------------------------------------------------------------------
+# Voortgangsindicator
+# ---------------------------------------------------------------------------
+
+
+def test_format_duration_ms_uses_dot_thousands_separator() -> None:
+    assert format_duration_ms(24) == "24ms"
+    assert format_duration_ms(58.4) == "58ms"
+    assert format_duration_ms(23452) == "23.452ms"
+    assert format_duration_ms(None) == ""
+
+
+def test_progress_steps_appends_pending_external_step() -> None:
+    template = _basic_template()
+    timings = [
+        LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
+        LayerTiming(_layer("spacy"), LayerStatus.OK, 58.0, 0),
+        LayerTiming(_layer("llm"), LayerStatus.DISABLED, None, 0),
+    ]
+    steps = progress_steps(timings, template)
+    assert len(steps) == 4
+    assert steps[0].label == "Dryrun identificatielaag RegEx"
+    assert steps[0].status is StepStatus.DONE
+    assert "NER (spaCy" in steps[1].label
+    assert steps[2].status is StepStatus.DISABLED
+    assert steps[2].note == "staat uit in deze opdracht"
+    # Externe-LLM-stap staat standaard op pending.
+    assert steps[3].status is StepStatus.PENDING
+    assert steps[3].label.startswith("Extern LLM")
+
+
+def test_progress_steps_marks_unavailable_layer() -> None:
+    template = _basic_template()
+    timings = [
+        LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
+        LayerTiming(_layer("spacy"), LayerStatus.UNAVAILABLE, 3.0, 0),
+        LayerTiming(_layer("llm"), LayerStatus.UNAVAILABLE, 12.0, 0),
+    ]
+    steps = progress_steps(timings, template)
+    assert steps[1].status is StepStatus.UNAVAILABLE
+    assert steps[1].note == "niet beschikbaar"
+
+
+def test_external_step_done_on_http_200() -> None:
+    template = _basic_template()
+    signals = response_signals(200, {"content": [{"type": "text", "text": "Hoi"}]})
+    step = external_step_from_response(
+        status=200, latency_ms=23452, signals=signals, template=template
+    )
+    assert step.status is StepStatus.DONE
+    assert step.duration_ms == 23452
+
+
+def test_external_step_unavailable_on_no_connection() -> None:
+    template = _basic_template()
+    signals = response_signals(0, {"error": "connect"})
+    step = external_step_from_response(
+        status=0, latency_ms=5, signals=signals, template=template
+    )
+    assert step.status is StepStatus.UNAVAILABLE
+    assert step.note == "geen verbinding met de proxy"
+
+
+def test_with_external_step_replaces_trailing_external_only() -> None:
+    template = _basic_template()
+    timings = [
+        LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
+        LayerTiming(_layer("spacy"), LayerStatus.OK, 58.0, 0),
+        LayerTiming(_layer("llm"), LayerStatus.DISABLED, None, 0),
+    ]
+    base = progress_steps(timings, template)
+    done = ProgressStep("Extern LLM (claude-3-haiku)", StepStatus.DONE, duration_ms=100)
+    replaced = with_external_step(base, done)
+    assert len(replaced) == 4
+    assert replaced[:3] == base[:3]
+    assert replaced[3] is done
+
+
+def test_progress_panel_html_renders_one_block_with_steps() -> None:
+    template = _basic_template()
+    timings = [
+        LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
+        LayerTiming(_layer("spacy"), LayerStatus.RUNNING, None, 0),
+        LayerTiming(_layer("llm"), LayerStatus.DISABLED, None, 0),
+    ]
+    html_out = progress_panel_html(progress_steps(timings, template))
+    assert html_out.count('class="pylades-progress"') == 1
+    assert "Stap 1" in html_out and "Stap 4" in html_out
+    assert "✓ 24ms" in html_out
+    assert "bezig…" in html_out
+    assert "staat uit in deze opdracht" in html_out
+    assert "nog niet verstuurd" in html_out
+
+
+def _layer(value: str) -> DetectionLayer:
+    return DetectionLayer(value)
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +319,37 @@ def test_reconcile_moves_accepted_into_protected_after_resolve(review_env: None)
     originals = {e.original for e in synced.entities}
     assert "123456782" in originals
     assert "De Boer" in originals
+    assert all(e.pseudonym for e in synced.entities)
+
+
+def test_reconcile_pseudonymizes_preview_when_entity_missing_in_text(
+    review_env: None,
+) -> None:
+    """Regressie: een entiteit die niet (meer) in de tekst staat mocht de preview
+    niet laten terugvallen op niet-gepseudonimiseerde tekst (overlap-ValueError)."""
+    template = _basic_template()
+    found = _make_entity(original="De Boer", pseudonym=None)
+    dry = _make_analysis(
+        entities=[found],
+        generalized="Patiënt De Boer is gezien op de polikliniek.",
+    )
+    # Geaccepteerde entiteit waarvan de originele waarde NIET in de tekst staat.
+    missing = _make_entity(original="01-01-1980", pseudonym=None)
+    enqueue("sess-missing", "context", [missing])
+    item = get_pending("sess-missing")[0]
+    assert item.id is not None
+    decide(item.id, ReviewStatus.ACCEPTED)
+
+    synced = reconcile_analysis_for_display(
+        dry,
+        template,
+        proxy_session_id="sess-missing",
+        session_resolved=True,
+        response_status=423,
+    )
+
+    assert "De Boer" not in synced.pseudonymized
+    assert synced.pseudonymized.startswith("Patiënt ")
     assert all(e.pseudonym for e in synced.entities)
 
 
@@ -476,3 +627,136 @@ def test_pseudonymized_highlights_includes_placeholders_and_pending() -> None:
     assert highlights["PAT-001"] == "one_way"
     assert highlights["BSN-001"] == "two_way"
     assert highlights["Twijfel"] == "pending"
+
+
+# ---------------------------------------------------------------------------
+# Run-fase (Home actieknoppen + status-strips)
+# ---------------------------------------------------------------------------
+
+
+def _ok_response_payload() -> dict[str, object]:
+    return {"content": [{"type": "text", "text": "Antwoord."}], "stop_reason": "end_turn"}
+
+
+def test_compute_run_phase_idle_without_analysis() -> None:
+    ctx = compute_run_phase(
+        analysis=None,
+        display_analysis=None,
+        session_id=None,
+        session_resolved=False,
+        response_record=None,
+    )
+    assert ctx.phase == RunPhase.IDLE
+    assert ctx.send_button_label is None
+
+
+def test_compute_run_phase_ready_to_send_after_dry_run() -> None:
+    analysis = _make_analysis()
+    ctx = compute_run_phase(
+        analysis=analysis,
+        display_analysis=analysis,
+        session_id=None,
+        session_resolved=False,
+        response_record=None,
+    )
+    assert ctx.phase == RunPhase.READY_TO_SEND
+    assert ctx.send_button_label == "Verstuur naar extern LLM"
+    assert ctx.resume_session is None
+
+
+def test_compute_run_phase_review_pending() -> None:
+    analysis = _make_analysis(pending=[_make_entity(pseudonym=None)])
+    ctx = compute_run_phase(
+        analysis=analysis,
+        display_analysis=analysis,
+        session_id="sess-1",
+        session_resolved=False,
+        response_record=None,
+    )
+    assert ctx.phase == RunPhase.REVIEW_PENDING
+    assert ctx.send_button_label is None
+
+
+def test_compute_run_phase_ready_to_resume_after_review() -> None:
+    analysis = _make_analysis()
+    ctx = compute_run_phase(
+        analysis=analysis,
+        display_analysis=analysis,
+        session_id="sess-done",
+        session_resolved=True,
+        response_record={"status": 423, "payload": {"session_id": "sess-done"}},
+    )
+    assert ctx.phase == RunPhase.READY_TO_SEND
+    assert ctx.send_button_label == "Hervat naar extern LLM"
+    assert ctx.resume_session == "sess-done"
+    assert ctx.show_resume_ready_banner is True
+
+
+def test_compute_run_phase_complete_after_http_200() -> None:
+    analysis = _make_analysis()
+    ctx = compute_run_phase(
+        analysis=analysis,
+        display_analysis=analysis,
+        session_id="sess-done",
+        session_resolved=True,
+        response_record={"status": 200, "payload": _ok_response_payload()},
+    )
+    assert ctx.phase == RunPhase.COMPLETE
+    assert ctx.send_button_label is None
+    assert ctx.show_complete_banner is True
+    assert ctx.show_resume_ready_banner is False
+
+
+def test_compute_run_phase_failed_on_empty_200() -> None:
+    analysis = _make_analysis()
+    ctx = compute_run_phase(
+        analysis=analysis,
+        display_analysis=analysis,
+        session_id="sess-done",
+        session_resolved=True,
+        response_record={"status": 200, "payload": {"content": [], "stop_reason": "end_turn"}},
+    )
+    assert ctx.phase == RunPhase.FAILED
+    assert ctx.send_button_label == "Opnieuw proberen"
+    assert ctx.show_failed_banner is True
+
+
+def test_compute_run_phase_failed_on_proxy_error() -> None:
+    analysis = _make_analysis()
+    ctx = compute_run_phase(
+        analysis=analysis,
+        display_analysis=analysis,
+        session_id="sess-1",
+        session_resolved=False,
+        response_record={"status": 503, "payload": {"error": "upstream down"}},
+    )
+    assert ctx.phase == RunPhase.FAILED
+    assert ctx.send_button_label == "Opnieuw proberen"
+
+
+def test_accent_strip_class_for_run_phase() -> None:
+    assert "attention" in accent_strip_class_for_run_phase(RunPhase.REVIEW_PENDING)
+    assert "error" in accent_strip_class_for_run_phase(RunPhase.FAILED)
+    assert "ok" in accent_strip_class_for_run_phase(RunPhase.COMPLETE)
+
+
+def test_analysis_caption_for_complete_phase() -> None:
+    ctx = compute_run_phase(
+        analysis=_make_analysis(),
+        display_analysis=_make_analysis(),
+        session_id="s",
+        session_resolved=True,
+        response_record={"status": 200, "payload": _ok_response_payload()},
+    )
+    assert "Antwoord ontvangen" in analysis_caption_for_run_phase(ctx)
+
+
+def test_summarize_failed_phase_avoids_antwoord_ontvangen_on_empty_200() -> None:
+    result = _make_analysis()
+    summary = summarize_for_lay_user(
+        result,
+        response_status=200,
+        run_phase=RunPhase.FAILED,
+    )
+    assert "antwoord ontvangen" not in summary.summary_line
+    assert "geen bruikbaar antwoord" in summary.summary_line

@@ -9,7 +9,7 @@ niet de huidige release.
 
 from __future__ import annotations
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 TARGET_VERSION = "0.3.0"
 
 PRODUCT_NAME = "Pylades"
@@ -35,7 +35,7 @@ def pylades_display() -> str:
 
 
 def pylades_page_title(page: str) -> str:
-    """Browsertitel: ``Pylades v0.2.2 — Prompts``."""
+    """Browsertitel: ``Pylades v0.2.2 — Opdrachten``."""
     return f"{pylades_display()} — {page}"
 
 

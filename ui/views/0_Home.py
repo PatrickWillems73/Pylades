@@ -54,18 +54,30 @@ from ui.review_flow import (
 from ui.testrun_helpers import (
     AnalysisResult,
     PrivacyReportContext,
+    ProgressStep,
     ResponseSignals,
-    analyze_prompt,
+    RunPhase,
+    RunPhaseContext,
+    StepStatus,
+    accent_strip_class_for_run_phase,
+    analysis_caption_for_run_phase,
+    analyze_prompt_timed,
     build_privacy_report_csv,
     build_privacy_report_md,
+    compute_run_phase,
     entity_type_label,
+    external_llm_label,
+    external_step_from_response,
     format_curl_equivalent,
     highlight_pairs,
     lay_explanation,
+    progress_panel_html,
+    progress_steps,
     pseudonymized_highlights,
     reconcile_analysis_for_display,
     response_signals,
     summarize_for_lay_user,
+    with_external_step,
 )
 from ui.theme import (
     HIGHLIGHT_ONE_WAY,
@@ -74,6 +86,7 @@ from ui.theme import (
 )
 from ui.ui_extras import (
     attention_notice,
+    render_llm_response_panel,
     scroll_to_element,
     section_heading,
     section_spacer,
@@ -91,18 +104,19 @@ _STATE_DEFAULTS: dict[str, Any] = {
     "testrun_response": None,
     "testrun_session_id": None,
     "testrun_history": [],
-    "_last_upload_id": "",
+    "testrun_progress": None,
+    "_pending_action": None,
     "_review_redirect_target": "",
 }
 
 _DOSSIER_WIDGET_KEY = "home_dossier_text"
 _LLM_RESPONSE_ANCHOR_ID = "pylades-llm-response"
+_PROGRESS_ANCHOR_ID = "pylades-progress-block"
 _SCROLL_TO_LLM_RESPONSE_KEY = "_scroll_to_llm_response"
 _SEND_CAPTION = (
     "Door op deze knop te klikken stuur je de gepseudonimiseerde "
     "versie naar het externe LLM."
 )
-_PENDING_DRY_RUN_KEY = "_pending_dry_run"
 
 
 def _persist_dossier(text: str) -> None:
@@ -131,16 +145,6 @@ def _seed_dossier_widget() -> None:
         st.session_state[_DOSSIER_WIDGET_KEY] = canonical
 
 
-def _show_inline_status(slot: Any, message: str) -> None:
-    """Statusregel direct onder de actie-knoppen (i.p.v. spinner rechtsboven)."""
-    slot.markdown(
-        f'<p class="pylades-inline-status">'
-        f'<span class="pylades-inline-status__dot"></span>'
-        f"{html.escape(message)}</p>",
-        unsafe_allow_html=True,
-    )
-
-
 def _template_select_index(templates: list[Template]) -> int:
     tid = st.session_state.testrun_template_id
     if tid is None:
@@ -157,10 +161,11 @@ for _key, _default in _STATE_DEFAULTS.items():
 
 
 def _reset_run_state() -> None:
-    """Wis preview + response (na upload/template-wissel)."""
+    """Wis preview + response (na template-wissel of dossier-wijziging)."""
     st.session_state.testrun_analysis = None
     st.session_state.testrun_response = None
     st.session_state.testrun_session_id = None
+    st.session_state.testrun_progress = None
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +222,7 @@ def _highlight_text(text: str, highlights: Iterable[tuple[str, str]]) -> str:
 
 
 def _render_preview_block(text: str, highlights: Iterable[tuple[str, str]] = ()) -> None:
-    """Toon een prompt-voorbeeld met regelafbreking i.p.v. horizontale scroll."""
+    """Toon een opdracht-voorbeeld met regelafbreking i.p.v. horizontale scroll."""
     body = _highlight_text(text, highlights) if highlights else html.escape(text)
     st.markdown(
         '<pre style="white-space: pre-wrap; word-break: break-word; '
@@ -307,7 +312,7 @@ def _store_response_in_history(record: dict[str, Any], template_id: int | None) 
 
 st.title("Vertrouw je dossier toe aan Pylades")
 st.markdown(
-    "Kies een prompt, plak patiëntinformatie en zie wat het externe LLM "
+    "Kies een opdracht, plak patiëntinformatie en zie wat het externe LLM "
     "zou zien voordat je verstuurt."
 )
 
@@ -333,15 +338,15 @@ is_simple = mode == MODE_SIMPLIFIED
 
 
 # ---------------------------------------------------------------------------
-# Prompt-keuze
+# Opdracht-keuze
 # ---------------------------------------------------------------------------
 
 templates = list_templates()
 
 if not templates:
     st.warning(
-        "Geen prompts gevonden. Maak er eerst eentje aan via de pagina "
-        "**Prompts** in het menu links."
+        "Geen opdrachten gevonden. Maak er eerst eentje aan via de pagina "
+        "**Opdrachten** in het menu links."
     )
     st.stop()
 
@@ -359,11 +364,11 @@ _template_labels = [_template_label(t, include_id=not is_simple) for t in templa
 
 with st.container(border=not is_simple):
     if is_simple:
-        section_heading("Prompt")
+        section_heading("Opdracht")
     else:
-        st.markdown("**Prompt**")
+        st.markdown("**Opdracht**")
     label = st.radio(
-        "Kies een prompt",
+        "Kies een opdracht",
         _template_labels,
         index=_template_select_index(templates),
         key="home-template-radio",
@@ -380,15 +385,15 @@ with st.container(border=not is_simple):
         st.caption(
             f"Provider/model: `{template.llm_provider}` / `{template.llm_naam}` · "
             f"max_tokens: `{template.max_tokens}` · "
-            f"prompt-default modus: "
+            f"opdracht-default modus: "
             f"`{template.default_mode.value if template.default_mode else '— (super-default)'}`"
         )
-        with st.expander("Prompt-template (read-only)", expanded=False):
+        with st.expander("Opdracht-template (read-only)", expanded=False):
             st.code(template.prompt_tekst or "(leeg)", language="text")
 
 
 # ---------------------------------------------------------------------------
-# Dossier-veld + file-upload
+# Dossier-veld
 # ---------------------------------------------------------------------------
 
 with st.container(border=not is_simple):
@@ -413,24 +418,6 @@ with st.container(border=not is_simple):
     if dossier != st.session_state.testrun_dossier:
         st.session_state.testrun_dossier = dossier
         _reset_run_state()
-    upload = st.file_uploader(
-        "Of upload een .txt-dossier",
-        type=["txt"],
-        key="home-dossier-upload",
-        label_visibility="collapsed",
-    )
-    if upload is not None:
-        fid = f"{upload.name}:{upload.size}"
-        if st.session_state._last_upload_id != fid:
-            try:
-                uploaded_text = upload.read().decode("utf-8", errors="replace")
-            except OSError as exc:
-                st.error(f"Kan upload niet lezen: {exc}")
-            else:
-                _persist_dossier(uploaded_text)
-                st.session_state._last_upload_id = fid
-                _reset_run_state()
-                st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -443,50 +430,78 @@ def _dossier_blocking_message() -> str | None:
         return "Patiëntdossier is leeg."
     if not template.prompt_tekst or "{input}" not in template.prompt_tekst:
         return (
-            "Prompt heeft geen geldige prompt-tekst met `{input}`. "
-            "Pas hem aan via de pagina **Prompts**."
+            "Opdracht heeft geen geldige opdrachttekst met `{input}`. "
+            "Pas hem aan via de pagina **Opdrachten**."
         )
     return None
 
 
-def _do_dry_run() -> None:
+def _render_progress(progress_slot: Any, steps: list[ProgressStep]) -> None:
+    """Schrijf het voortgangsblok in de vaste placeholder (één blok, zelfde plek)."""
+    progress_slot.markdown(progress_panel_html(steps), unsafe_allow_html=True)
+
+
+def _run_dry_run(progress_slot: Any) -> None:
+    """Voer de voorbeeld-analyse uit en update het voortgangsblok live per laag."""
     err = _dossier_blocking_message()
     if err:
         st.error(err)
         return
-    st.session_state.testrun_analysis = analyze_prompt(template, dossier)
+
+    def _on_layer(timings: list[Any]) -> None:
+        _render_progress(progress_slot, progress_steps(timings, template))
+
+    result, timings = analyze_prompt_timed(template, dossier, on_layer=_on_layer)
+    st.session_state.testrun_analysis = result
     st.session_state.testrun_response = None
+    steps = progress_steps(timings, template)
+    st.session_state.testrun_progress = steps
+    _render_progress(progress_slot, steps)
 
 
-def _do_real_post(
+def _run_send(
+    progress_slot: Any,
     *,
     resume_session: str | None = None,
-    status_slot: Any | None = None,
-    status_message: str = "Versturen naar extern LLM - dit kan even duren…",
 ) -> None:
+    """Verstuur naar het externe LLM en werk de externe-LLM-stap live bij."""
     err = _dossier_blocking_message()
     if err:
         st.error(err)
         return
-    if status_slot is not None:
-        _show_inline_status(status_slot, status_message)
+
+    base_steps = st.session_state.testrun_progress or progress_steps([], template)
+    running = ProgressStep(
+        external_llm_label(template),
+        StepStatus.RUNNING,
+        note="bezig… (inclusief stap 1 t/m 3)",
+    )
+    _render_progress(progress_slot, with_external_step(base_steps, running))
+
     record = _post_to_proxy(
         int(template.id or 0),
         dossier,
         resume_session=resume_session,
     )
-    if status_slot is not None:
-        status_slot.empty()
     record["resume_session"] = resume_session
     _persist_dossier(dossier)
     st.session_state.testrun_response = record
     if record["session_id"]:
         st.session_state.testrun_session_id = record["session_id"]
-    if resume_session:
-        signals = response_signals(record["status"], record["payload"])
-        if signals.assistant_text:
-            st.session_state[_SCROLL_TO_LLM_RESPONSE_KEY] = True
+    signals = response_signals(record["status"], record["payload"])
+    if signals.assistant_text:
+        st.session_state[_SCROLL_TO_LLM_RESPONSE_KEY] = True
     _store_response_in_history(record, template.id)
+
+    external = external_step_from_response(
+        status=record["status"],
+        latency_ms=record.get("latency_ms"),
+        signals=signals,
+        template=template,
+    )
+    final_steps = with_external_step(base_steps, external)
+    st.session_state.testrun_progress = final_steps
+    _render_progress(progress_slot, final_steps)
 
 
 def _navigate_to_review(session_id: str) -> None:
@@ -495,6 +510,130 @@ def _navigate_to_review(session_id: str) -> None:
     st.session_state["review_session_override"] = session_id
     st.query_params["session"] = session_id
     st.switch_page(REVIEW_QUEUE_PAGE)
+
+
+def _render_resume_ready_banner(result: AnalysisResult | None) -> None:
+    """Bevestig dat de review klaar is en dat alleen hervatten nog rest."""
+    protected = len(result.entities) if result else 0
+    if protected == 1:
+        recap = "1 gegeven blijft beschermd. "
+    elif protected > 1:
+        recap = f"{protected} gegevens blijven beschermd. "
+    else:
+        recap = ""
+    st.markdown(
+        '<div class="pylades-accent-strip pylades-accent-strip--ok">'
+        "<strong>Alle twijfelgevallen zijn afgehandeld.</strong>"
+        '<div style="opacity:0.75; font-size:0.85rem; margin-top:0.35rem;">'
+        f"{html.escape(recap)}Alleen nog hervatten: de gepseudonimiseerde "
+        "versie gaat dan naar het externe LLM."
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_complete_banner() -> None:
+    """Bevestig succesvolle upstream-call — geen verstuur-knop meer nodig."""
+    st.markdown(
+        '<div class="pylades-accent-strip pylades-accent-strip--ok">'
+        "<strong>Verstuurd — antwoord staat hieronder.</strong>"
+        '<div style="opacity:0.75; font-size:0.85rem; margin-top:0.35rem;">'
+        "Je kunt het antwoord van het externe LLM verderop op deze pagina lezen."
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_failed_banner(ctx: RunPhaseContext) -> None:
+    """Fout na echte proxy-call — retry via Opnieuw proberen, niet Hervat."""
+    detail = ""
+    if ctx.response_signals and ctx.response_signals.error_message:
+        detail = ctx.response_signals.error_message
+    elif ctx.response_status == 0:
+        detail = "Geen verbinding met de proxy."
+    st.markdown(
+        '<div class="pylades-accent-strip pylades-accent-strip--error">'
+        "<strong>Versturen mislukt — probeer opnieuw.</strong>"
+        + (
+            f'<div style="opacity:0.75; font-size:0.85rem; margin-top:0.35rem;">'
+            f"{html.escape(detail)}</div>"
+            if detail
+            else ""
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_action_banners(ctx: RunPhaseContext, result: AnalysisResult | None) -> None:
+    if ctx.show_complete_banner:
+        _render_complete_banner()
+    elif ctx.show_failed_banner:
+        _render_failed_banner(ctx)
+    elif ctx.show_resume_ready_banner:
+        _render_resume_ready_banner(result)
+
+
+def _queue_dry_run() -> None:
+    st.session_state["_pending_action"] = {"kind": "dry_run"}
+    st.rerun()
+
+
+def _queue_send(ctx: RunPhaseContext) -> None:
+    st.session_state["_pending_action"] = {
+        "kind": "send",
+        "resume_session": ctx.resume_session,
+    }
+    st.rerun()
+
+
+def _queue_review() -> None:
+    st.session_state["_pending_action"] = {"kind": "review"}
+    st.rerun()
+
+
+def _run_review(progress_slot: Any) -> None:
+    """Zet de twijfelgevallen in de review-queue; toont stap 4 live als ``bezig…``.
+
+    De proxy geeft hier HTTP 423 terug (geen externe-LLM-call); bij succes
+    navigeren we naar de Review-queue, bij een onverwachte status blijft de
+    gebruiker op Home. In beide gevallen weerspiegelt stap 4 de uitkomst.
+    """
+    err = _dossier_blocking_message()
+    if err:
+        st.error(err)
+        return
+
+    base_steps = st.session_state.testrun_progress or progress_steps([], template)
+    running = ProgressStep(
+        external_llm_label(template),
+        StepStatus.RUNNING,
+        note=(
+            "nog niet aangeroepen — twijfelgevallen klaarzetten voor jouw "
+            "beoordeling (inclusief stap 1 t/m 3)…"
+        ),
+    )
+    _render_progress(progress_slot, with_external_step(base_steps, running))
+
+    record = _post_to_proxy(int(template.id or 0), dossier)
+    st.session_state.testrun_response = record
+    _store_response_in_history(record, template.id)
+
+    external = external_step_from_response(
+        status=record["status"],
+        latency_ms=record.get("latency_ms"),
+        signals=response_signals(record["status"], record["payload"]),
+        template=template,
+    )
+    final_steps = with_external_step(base_steps, external)
+    st.session_state.testrun_progress = final_steps
+    _render_progress(progress_slot, final_steps)
+
+    if record["status"] == 423 and record["session_id"]:
+        st.session_state.testrun_session_id = record["session_id"]
+        _navigate_to_review(record["session_id"])
+    # Bij een onverwachte status blijven we op Home; de status-strip en het
+    # voortgangsblok (stap 4) tonen de fout na de rerun.
 
 
 analysis: AnalysisResult | None = st.session_state.testrun_analysis
@@ -512,137 +651,122 @@ display_analysis: AnalysisResult | None = (
     if analysis is not None
     else None
 )
+run_ctx = compute_run_phase(
+    analysis=analysis,
+    display_analysis=display_analysis,
+    session_id=session_id_state,
+    session_resolved=session_resolved,
+    response_record=response_record,
+)
 
 st.markdown(
-    f'<div id="{HOME_ACTION_ANCHOR_ID}"></div>',
+    f'<div id="{HOME_ACTION_ANCHOR_ID}" style="scroll-margin-top: 6rem;"></div>',
     unsafe_allow_html=True,
 )
 
+# Zodra een actie in de wachtrij staat (klik → rerun → verwerking hieronder),
+# disablen we de start-knoppen zodat verwerking niet dubbel kan worden gestart.
+_processing = bool(st.session_state.get("_pending_action"))
+
 if is_simple:
-    # --- Compact: drie-staps-keten, max één primaire knop tegelijk -----
-    if analysis is None and not session_resolved:
-        start_clicked = st.button(
+    # --- Compact: één primaire actie per run-fase -----------------------------
+    if run_ctx.phase == RunPhase.IDLE:
+        if st.button(
             "Start",
             type="primary",
             use_container_width=False,
+            disabled=_processing,
             help=(
                 "Doet een voorbeeld-analyse (geen verbinding met het externe "
                 "LLM, geen opslag). Daarna kies je bewust of je verstuurt."
             ),
-        )
-        start_status = st.empty()
-        if st.session_state.pop(_PENDING_DRY_RUN_KEY, False):
-            _show_inline_status(start_status, "Voorbeeld-analyse bezig…")
-            _do_dry_run()
-            st.rerun()
-        if start_clicked:
-            st.session_state[_PENDING_DRY_RUN_KEY] = True
-            st.rerun()
-    elif analysis is None and session_resolved:
-        st.success(
-            "Alle review-items zijn afgehandeld — je kunt nu hervatten naar "
-            "het externe LLM."
-        )
-        hervat_clicked = st.button("Hervat naar extern LLM", type="primary")
-        st.caption(_SEND_CAPTION)
-        hervat_status = st.empty()
-        if hervat_clicked:
-            _do_real_post(
-                resume_session=session_id_state,
-                status_slot=hervat_status,
-                status_message="Hervatten naar extern LLM - dit kan even duren…",
-            )
-            st.rerun()
-    else:
-        assert analysis is not None
-        assert display_analysis is not None
-        has_pending = bool(display_analysis.pending_review)
-        if has_pending and not session_resolved:
+        ):
+            _queue_dry_run()
+    elif run_ctx.phase == RunPhase.REVIEW_PENDING:
+        if display_analysis and display_analysis.pending_review:
             pending_count = len(display_analysis.pending_review)
             attention_notice(
                 f"Pylades twijfelt over <strong>{pending_count}</strong> "
                 "detectie(s). Beslis er eerst over voordat we het externe "
                 "LLM iets laten zien."
             )
-            review_clicked = st.button(
-                "Open openstaande beslissingen",
-                type="primary",
-                help=(
-                    "We plaatsen de twijfelgevallen in de review-queue (geen "
-                    "verbinding met het externe LLM op dit moment) en "
-                    "openen die pagina."
-                ),
-            )
-            review_status = st.empty()
-            if review_clicked:
-                _show_inline_status(review_status, "Klaarzetten in de review-queue…")
-                record = _post_to_proxy(int(template.id or 0), dossier)
-                review_status.empty()
-                if record["status"] == 423 and record["session_id"]:
-                    st.session_state.testrun_session_id = record["session_id"]
-                    st.session_state.testrun_response = record
-                    _store_response_in_history(record, template.id)
-                    _navigate_to_review(record["session_id"])
-                else:
-                    st.session_state.testrun_response = record
-                    st.error(
-                        "De proxy gaf een onverwachte status terug "
-                        f"(HTTP {record['status']}). Open Uitgebreid voor "
-                        "de details."
-                    )
         else:
-            resume = session_id_state if session_resolved else None
-            button_label = (
-                "Hervat naar extern LLM" if resume else "Verstuur naar extern LLM"
+            attention_notice(
+                "Er staan review-beslissingen open. Los ze op via de "
+                "<strong>Review-queue</strong> voordat je verstuurt."
             )
+        if st.button(
+            "Open openstaande beslissingen",
+            type="primary",
+            disabled=_processing,
+            help=(
+                "We plaatsen de twijfelgevallen in de review-queue (geen "
+                "verbinding met het externe LLM op dit moment) en "
+                "openen die pagina."
+            ),
+        ):
+            _queue_review()
+    else:
+        _render_action_banners(run_ctx, display_analysis)
+        if run_ctx.send_button_label:
             send_clicked = st.button(
-                button_label,
+                run_ctx.send_button_label,
                 type="primary",
+                disabled=_processing,
             )
-            st.caption(_SEND_CAPTION)
-            send_status = st.empty()
+            if run_ctx.phase == RunPhase.READY_TO_SEND:
+                st.caption(_SEND_CAPTION)
             if send_clicked:
-                _do_real_post(
-                    resume_session=resume,
-                    status_slot=send_status,
-                )
-                st.rerun()
+                _queue_send(run_ctx)
 
-    if analysis is not None and st.button(
+    if analysis is not None and run_ctx.phase != RunPhase.IDLE and st.button(
         "Begin opnieuw",
-        type="secondary",
-        help="Wist de analyse en eventueel antwoord. Het dossier blijft staan.",
+        type="tertiary",
+        help=(
+            "Wist de analyse en het eventuele antwoord en sluit een "
+            "afgehandelde sessie af. Je dossier blijft staan."
+        ),
     ):
         _reset_run_state()
         st.rerun()
 else:
-    action_status = st.empty()
     # --- Uitgebreid: huidige split (dry-run vs verstuur) ------------------
     col_a, col_b = st.columns([1, 1])
     with col_a:
-        if st.button("Analyseer anonimisatie", use_container_width=True):
-            _do_dry_run()
-            st.rerun()
+        if st.button(
+            "Analyseer anonimisatie",
+            use_container_width=True,
+            disabled=_processing,
+        ):
+            _queue_dry_run()
     with col_b:
         can_send = bool(dossier.strip()) and template.id is not None
-        resume_session = session_id_state if session_resolved else None
-        send_label = "Hervat naar extern LLM" if resume_session else "Verstuur naar extern LLM"
-        if st.button(
-            send_label,
-            use_container_width=True,
-            type="primary",
-            disabled=not can_send,
-            help=(
-                None
-                if can_send
-                else "Vul een patiëntdossier in en kies een geldige prompt."
-            ),
-        ):
-            _do_real_post(
-                resume_session=resume_session,
-                status_slot=action_status,
-            )
-            st.rerun()
+        send_disabled = (
+            _processing
+            or not can_send
+            or run_ctx.phase == RunPhase.REVIEW_PENDING
+            or run_ctx.phase == RunPhase.COMPLETE
+            or run_ctx.send_button_label is None
+        )
+        if run_ctx.send_button_label:
+            if st.button(
+                run_ctx.send_button_label,
+                use_container_width=True,
+                type="primary",
+                disabled=send_disabled,
+                help=(
+                    None
+                    if can_send and not send_disabled
+                    else "Vul een patiëntdossier in en kies een geldige opdracht."
+                    if not can_send
+                    else "Actie niet beschikbaar in deze fase."
+                ),
+            ):
+                _queue_send(run_ctx)
+    if run_ctx.phase in (RunPhase.COMPLETE, RunPhase.FAILED):
+        _render_action_banners(run_ctx, display_analysis)
+    elif run_ctx.show_resume_ready_banner:
+        _render_action_banners(run_ctx, display_analysis)
     if session_id_state and not all_resolved(session_id_state):
         st.warning(
             f"Sessie `{session_id_state}` heeft nog openstaande review-items. "
@@ -650,6 +774,33 @@ else:
         )
         if st.button("Open review-queue voor deze sessie"):
             _navigate_to_review(session_id_state)
+
+# ---------------------------------------------------------------------------
+# Voortgangsindicator — één blok, vaste plek, altijd actueel zichtbaar
+# ---------------------------------------------------------------------------
+st.markdown(
+    f'<div id="{_PROGRESS_ANCHOR_ID}" style="scroll-margin-top: 6rem;"></div>',
+    unsafe_allow_html=True,
+)
+progress_slot = st.empty()
+_pending_action = st.session_state.pop("_pending_action", None)
+if _pending_action and _pending_action.get("kind") in {"dry_run", "send", "review"}:
+    # Breng het voortgangsblok in beeld zodra verwerking start, zodat de
+    # live statuswijzigingen (stap 1 t/m 4) altijd zichtbaar zijn.
+    scroll_to_element(_PROGRESS_ANCHOR_ID)
+if _pending_action and _pending_action.get("kind") == "dry_run":
+    _run_dry_run(progress_slot)
+    st.rerun()
+elif _pending_action and _pending_action.get("kind") == "send":
+    _run_send(progress_slot, resume_session=_pending_action.get("resume_session"))
+    st.rerun()
+elif _pending_action and _pending_action.get("kind") == "review":
+    # `_run_review` navigeert bij succes (423) weg; bij een fout valt de uitkomst
+    # af te lezen uit het voortgangsblok (stap 4) en de status-strip hieronder.
+    _run_review(progress_slot)
+    st.rerun()
+elif st.session_state.testrun_progress:
+    _render_progress(progress_slot, st.session_state.testrun_progress)
 
 if st.session_state.pop(SCROLL_TO_HOME_ACTION_KEY, False):
     scroll_to_element(HOME_ACTION_ANCHOR_ID)
@@ -709,63 +860,32 @@ def _render_eenvoudig_entity_row(
 
 def _accent_strip_class(
     result: AnalysisResult,
-    response_status: int | None,
-    *,
-    session_resolved: bool = False,
+    run_ctx: RunPhaseContext,
 ) -> str:
-    """Linkerrand-kleur voor de samenvattingsstrip op basis van status."""
-    waiting = bool(result.pending_review) or (
-        response_status == 423 and not session_resolved
-    )
-    if waiting:
-        return "pylades-accent-strip pylades-accent-strip--attention"
-    if response_status is not None and (
-        response_status == 0 or (response_status >= 400 and response_status != 423)
-    ):
-        return "pylades-accent-strip pylades-accent-strip--error"
-    return "pylades-accent-strip pylades-accent-strip--ok"
+    """Linkerrand-kleur voor de samenvattingsstrip — zelfde fase als actieknoppen."""
+    _ = result
+    return accent_strip_class_for_run_phase(run_ctx.phase)
 
 
-def _eenvoudig_analysis_caption(
-    response_status: int | None,
-    *,
-    session_resolved: bool,
-) -> str:
-    if response_status == 200:
-        return "Antwoord ontvangen van het externe LLM."
-    if response_status == 423 and session_resolved:
-        return "Review afgehandeld — je kunt nu naar het externe LLM versturen."
-    if response_status == 423:
-        return (
-            "De proxy wacht op review-beslissingen voordat er iets naar het "
-            "externe LLM gaat."
-        )
-    return (
-        "Veilige voorbeeld-analyse — er is nog niets verstuurd naar het "
-        "externe LLM en niets opgeslagen."
-    )
+def _eenvoudig_analysis_caption(run_ctx: RunPhaseContext) -> str:
+    return analysis_caption_for_run_phase(run_ctx)
 
 
 def _render_eenvoudig_analysis(
     result: AnalysisResult,
     *,
-    session_resolved: bool,
+    run_ctx: RunPhaseContext,
+    answer_text: str | None = None,
 ) -> None:
     response_status = response_record["status"] if response_record else None
     summary = summarize_for_lay_user(
         result,
         response_status=response_status,
         session_resolved=session_resolved,
+        run_phase=run_ctx.phase,
     )
-    strip_class = _accent_strip_class(
-        result,
-        response_status,
-        session_resolved=session_resolved,
-    )
-    caption = _eenvoudig_analysis_caption(
-        response_status,
-        session_resolved=session_resolved,
-    )
+    strip_class = _accent_strip_class(result, run_ctx)
+    caption = _eenvoudig_analysis_caption(run_ctx)
     st.markdown(
         f'<div class="{strip_class}">'
         f"<strong>{html.escape(summary.summary_line)}</strong>"
@@ -775,7 +895,22 @@ def _render_eenvoudig_analysis(
         unsafe_allow_html=True,
     )
 
-    section_heading("Wat het externe LLM zou zien")
+    # Antwoord van het externe LLM direct onder de samenvattingsstrip, met
+    # extra accent voor attentiewaarde.
+    if answer_text:
+        render_llm_response_panel(
+            answer_text,
+            anchor_id=_LLM_RESPONSE_ANCHOR_ID,
+            accent=True,
+        )
+
+    seen = run_ctx.phase == RunPhase.COMPLETE
+    preview_heading = (
+        "Wat het externe LLM heeft gezien"
+        if seen
+        else "Wat het externe LLM zou zien"
+    )
+    section_heading(preview_heading)
     _render_preview_block(result.pseudonymized, pseudonymized_highlights(result))
 
     if result.entities:
@@ -854,9 +989,10 @@ def _render_response_status_strip(
     signals: ResponseSignals,
     *,
     session_id: str | None = None,
+    run_ctx: RunPhaseContext | None = None,
 ) -> None:
     if signals.status == 423:
-        if session_id and all_resolved(session_id):
+        if run_ctx and run_ctx.phase == RunPhase.READY_TO_SEND:
             st.warning(
                 "**HTTP 423** — er staan geen openstaande detectie-items meer "
                 "in de **Review-queue** voor deze sessie. Hervat "
@@ -894,7 +1030,7 @@ def _render_response_status_strip(
     elif signals.is_truncated:
         st.warning(
             "**Antwoord is afgebroken** op `max_tokens`. Verhoog "
-            "`max_tokens` in de prompt als je het hele antwoord wil zien."
+            "`max_tokens` in de opdracht als je het hele antwoord wil zien."
         )
     else:
         st.success(f"**HTTP {signals.status}** — antwoord ontvangen.")
@@ -902,24 +1038,24 @@ def _render_response_status_strip(
         st.caption(f"Bericht: {signals.error_message}")
 
 
-def _render_eenvoudig_response(record: dict[str, Any]) -> None:
+def _render_eenvoudig_response(
+    record: dict[str, Any],
+    *,
+    show_answer_panel: bool = True,
+) -> None:
     signals = response_signals(record["status"], record["payload"])
     _render_response_status_strip(
         signals,
         session_id=record.get("session_id") or None,
+        run_ctx=run_ctx,
     )
     if signals.status == 423:
         return
-    if signals.assistant_text:
-        st.markdown(
-            f'<div id="{_LLM_RESPONSE_ANCHOR_ID}" tabindex="-1"></div>',
-            unsafe_allow_html=True,
-        )
-        section_heading("Antwoord van het externe LLM")
-        st.markdown(
-            f'<div class="pylades-llm-response">'
-            f"{html.escape(signals.assistant_text)}</div>",
-            unsafe_allow_html=True,
+    if show_answer_panel and signals.assistant_text:
+        render_llm_response_panel(
+            signals.assistant_text,
+            anchor_id=_LLM_RESPONSE_ANCHOR_ID,
+            accent=True,
         )
     with st.expander("Technische details", expanded=False):
         st.caption(
@@ -941,6 +1077,7 @@ def _render_uitgebreid_response(record: dict[str, Any]) -> None:
     _render_response_status_strip(
         signals,
         session_id=record.get("session_id") or None,
+        run_ctx=run_ctx,
     )
     st.markdown("**Response (de-pseudonimized waar TWO_WAY van toepassing is)**")
     st.json(record["payload"])
@@ -956,11 +1093,7 @@ def _render_uitgebreid_extras(result: AnalysisResult | None) -> None:
         return
     with st.container(border=True):
         st.markdown("### Uitgebreid — diagnostiek")
-        resume = (
-            session_id_state
-            if session_id_state and all_resolved(session_id_state)
-            else None
-        )
+        resume = run_ctx.resume_session
         curl_cmd = format_curl_equivalent(
             template_id=int(template.id or 0),
             dossier=dossier,
@@ -991,7 +1124,7 @@ def _render_uitgebreid_extras(result: AnalysisResult | None) -> None:
                     else "—",
                     "Latency (ms)": item.get("latency_ms") or "—",
                     "Hervat": "ja" if item.get("is_resume") else "nee",
-                    "Prompt": item.get("template_id") or "—",
+                    "Opdracht": item.get("template_id") or "—",
                 }
                 for idx, item in enumerate(history)
             ]
@@ -1072,11 +1205,24 @@ with results_anchor:
     if not is_simple:
         section_spacer()
 
+    # Antwoord van het externe LLM komt (compact) direct onder de
+    # samenvattingsstrip in de analyse-render; in dat geval slaan we het
+    # antwoordblok in de response-sectie over om dubbele weergave te voorkomen.
+    _eenvoudig_answer_text: str | None = None
+    if is_simple and response_record is not None:
+        _resp_signals = response_signals(
+            response_record["status"], response_record["payload"]
+        )
+        if _resp_signals.status != 423 and _resp_signals.assistant_text:
+            _eenvoudig_answer_text = _resp_signals.assistant_text
+    _answer_moved = _eenvoudig_answer_text is not None and display_analysis is not None
+
     if display_analysis is not None:
         if is_simple:
             _render_eenvoudig_analysis(
                 display_analysis,
-                session_resolved=session_resolved,
+                run_ctx=run_ctx,
+                answer_text=_eenvoudig_answer_text if _answer_moved else None,
             )
         else:
             st.subheader("Analyse-preview (geen vault-writes)")
@@ -1086,7 +1232,10 @@ with results_anchor:
         if not is_simple:
             section_spacer()
         if is_simple:
-            _render_eenvoudig_response(response_record)
+            _render_eenvoudig_response(
+                response_record,
+                show_answer_panel=not _answer_moved,
+            )
             if st.session_state.pop(_SCROLL_TO_LLM_RESPONSE_KEY, False):
                 scroll_to_element(_LLM_RESPONSE_ANCHOR_ID)
         else:

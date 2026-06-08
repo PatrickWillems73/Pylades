@@ -1,7 +1,7 @@
 """Template-service: CRUD + JSON-deserialisatie van `mode_overrides`.
 
 Eén plek voor `proxy/main.py` (lookup tijdens een request) én voor de
-Streamlit Prompts-pagina (CRUD vanuit de UI). Houden we deze logica
+Streamlit Opdrachten-pagina (CRUD vanuit de UI). Houden we deze logica
 in twee modules, dan duiken JSON-schema-drift en TWO_WAY-onderbouwings-
 validatie op twee verschillende plekken op — en daar wordt iets vergeten.
 """

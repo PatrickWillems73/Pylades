@@ -158,7 +158,7 @@ _PROMPT_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 class Template(BaseModel):
-    """Prompt-template met per-entity pseudonimiseringsmodus (BR-C06).
+    """Opdracht-template met per-entity pseudonimiseringsmodus (BR-C06).
 
     `mode_overrides` is een dict in plaats van een aparte tabel: overrides
     worden altijd samen met de template gelezen, zijn klein (~20 keys), en

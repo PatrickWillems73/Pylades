@@ -23,11 +23,14 @@ from data.fixtures import (
 from proxy.detection import (
     _LLM_TYPE_MAP,
     REGEX_PATTERNS,
+    LayerStatus,
+    LayerTiming,
     Thresholds,
     _get_spacy_nlp,
     _llm_entities_from_payload,
     _merge_cross_layer,
     detect_all,
+    detect_all_timed,
     detect_llm,
     detect_regex,
     detect_spacy,
@@ -58,6 +61,58 @@ skip_no_spacy = pytest.mark.skipif(
         "draai 'uv run python -m spacy download nl_core_news_md'"
     ),
 )
+
+
+# ---------------------------------------------------------------------------
+# Per-laag timing (voortgangsindicator)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectAllTimed:
+    """`detect_all_timed` levert per-laag-timing + status, en draait callbacks."""
+
+    def test_returns_timing_per_layer_and_marks_llm_disabled(self) -> None:
+        result, timings = detect_all_timed(
+            f"BSN {VALID_BSN}", use_llm=False, thresholds=Thresholds()
+        )
+        layers = [t.layer for t in timings]
+        assert layers == [
+            DetectionLayer.REGEX,
+            DetectionLayer.SPACY,
+            DetectionLayer.LLM,
+        ]
+        regex_timing = timings[0]
+        assert regex_timing.status is LayerStatus.OK
+        assert regex_timing.duration_ms is not None
+        assert regex_timing.duration_ms >= 0.0
+        # Laag 3 staat uit zonder use_llm.
+        assert timings[2].status is LayerStatus.DISABLED
+        assert timings[2].duration_ms is None
+        # Resultaat identiek aan detect_all.
+        plain = detect_all(f"BSN {VALID_BSN}", thresholds=Thresholds())
+        assert {e.entity_type for e in result.confident_entities} == {
+            e.entity_type for e in plain.confident_entities
+        }
+
+    def test_on_layer_callback_emits_running_then_done(self) -> None:
+        snapshots: list[list[LayerTiming]] = []
+        detect_all_timed(
+            f"BSN {VALID_BSN}",
+            use_llm=False,
+            thresholds=Thresholds(),
+            on_layer=lambda timings: snapshots.append(list(timings)),
+        )
+        # Eerste callback markeert regex als RUNNING.
+        assert snapshots[0][-1].layer is DetectionLayer.REGEX
+        assert snapshots[0][-1].status is LayerStatus.RUNNING
+        # Laatste callback bevat drie afgeronde lagen (regex, spacy, llm-disabled).
+        final = snapshots[-1]
+        assert [t.layer for t in final] == [
+            DetectionLayer.REGEX,
+            DetectionLayer.SPACY,
+            DetectionLayer.LLM,
+        ]
+        assert all(t.status is not LayerStatus.RUNNING for t in final)
 
 
 # ---------------------------------------------------------------------------

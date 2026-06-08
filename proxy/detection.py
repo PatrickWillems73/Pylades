@@ -18,7 +18,9 @@ import logging
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from functools import lru_cache
+from time import perf_counter
 from typing import Any, Final
 
 from shared.config import settings
@@ -27,6 +29,30 @@ from shared.db import get_config_value
 from shared.models import DetectionLayer, DetectionResult, Entity, EntityType
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Per-laag timing/status (voor de UI-voortgangsindicator)
+# ---------------------------------------------------------------------------
+
+
+class LayerStatus(StrEnum):
+    """Uitkomst van één detectielaag, los van het aantal gevonden entities."""
+
+    RUNNING = "running"
+    OK = "ok"
+    DISABLED = "disabled"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class LayerTiming:
+    """Timing + status van één detectielaag voor één detect-run."""
+
+    layer: DetectionLayer
+    status: LayerStatus
+    duration_ms: float | None
+    entity_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -304,18 +330,19 @@ def detect_regex(text: str) -> list[Entity]:
     return entities
 
 
-def detect_spacy(text: str) -> list[Entity]:
-    """Laag 2: spaCy NER voor NAME/ORG/LOCATION.
+def detect_spacy_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
+    """Laag 2 met expliciete beschikbaarheidsstatus voor de voortgangsindicator.
 
     Soft-fail bij ontbrekend model — laag 1 heeft al gedraaid, dus de
-    pijplijn werkt door zonder spaCy. Operator ziet een rode status-card
-    op de Streamlit-homepage als dit gebeurt.
+    pijplijn werkt door zonder spaCy. De status onderscheidt "gedraaid"
+    (`OK`) van "model niet geïnstalleerd" (`UNAVAILABLE`) zodat de UI het
+    verschil kan tonen.
     """
     try:
         nlp = _get_spacy_nlp()
     except OSError as exc:
         logger.warning("Laag 2 (spaCy %r) niet beschikbaar: %s", settings.spacy_model, exc)
-        return []
+        return [], LayerStatus.UNAVAILABLE
 
     doc = nlp(text)
     entities: list[Entity] = []
@@ -333,7 +360,12 @@ def detect_spacy(text: str) -> list[Entity]:
                 end=ent.end_char,
             )
         )
-    return entities
+    return entities, LayerStatus.OK
+
+
+def detect_spacy(text: str) -> list[Entity]:
+    """Laag 2: spaCy NER voor NAME/ORG/LOCATION (zie `detect_spacy_with_status`)."""
+    return detect_spacy_with_status(text)[0]
 
 
 _LLM_SYSTEM_PROMPT: Final[str] = (
@@ -345,13 +377,13 @@ _LLM_SYSTEM_PROMPT: Final[str] = (
 )
 
 
-def detect_llm(text: str) -> list[Entity]:
-    """Laag 3: lokaal Ollama-LLM voor jargon/productnamen.
+def detect_llm_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
+    """Laag 3 met expliciete beschikbaarheidsstatus voor de voortgangsindicator.
 
-    Default uit; pas actief als `detect_all(..., use_llm=True)` wordt
-    aangeroepen. Soft-fail op elke fout: timeout, JSON-parse, model
-    ontbreekt, Ollama niet bereikbaar — laag 1+2 hebben hun werk al gedaan
-    en de proxy mag niet stoppen wegens een optionele laag.
+    Soft-fail op elke fout: timeout, JSON-parse, model ontbreekt, Ollama
+    niet bereikbaar — laag 1+2 hebben hun werk al gedaan en de proxy mag
+    niet stoppen wegens een optionele laag. De status is `UNAVAILABLE`
+    zodra de aanroep faalt, zodat de UI "niet beschikbaar" kan tonen.
     """
     try:
         import ollama  # noqa: PLC0415
@@ -373,7 +405,7 @@ def detect_llm(text: str) -> list[Entity]:
             type(exc).__name__,
             exc,
         )
-        return []
+        return [], LayerStatus.UNAVAILABLE
 
     import json  # noqa: PLC0415  # lazy: alleen nodig als LLM-pad actief is
 
@@ -381,9 +413,14 @@ def detect_llm(text: str) -> list[Entity]:
         parsed = json.loads(content)
     except (json.JSONDecodeError, TypeError) as exc:
         logger.warning("Laag 3 (Ollama) gaf geen geldige JSON: %s", exc)
-        return []
+        return [], LayerStatus.UNAVAILABLE
 
-    return _llm_entities_from_payload(text, parsed)
+    return _llm_entities_from_payload(text, parsed), LayerStatus.OK
+
+
+def detect_llm(text: str) -> list[Entity]:
+    """Laag 3: lokaal Ollama-LLM voor jargon/productnamen (zie `*_with_status`)."""
+    return detect_llm_with_status(text)[0]
 
 
 _LLM_TYPE_MAP: Final[dict[str, EntityType]] = {
@@ -447,22 +484,87 @@ def detect_all(
 ) -> DetectionResult:
     """Combineer alle lagen en route op confidence-threshold.
 
-    - `use_llm=False` (default): alleen regex + spaCy.
-    - `thresholds=None`: laad uit `config`-tabel; anders gebruik de
-      meegegeven waardes (handig voor tests en operator-overrides).
+    Dunne wrapper rond `detect_all_timed` die de per-laag-timing weggooit;
+    bestaande callers (proxy-pijplijn, eval) houden dezelfde signatuur.
+    """
+    result, _timings = detect_all_timed(text, use_llm=use_llm, thresholds=thresholds)
+    return result
+
+
+def detect_all_timed(
+    text: str,
+    *,
+    use_llm: bool = False,
+    thresholds: Thresholds | None = None,
+    on_layer: Callable[[list[LayerTiming]], None] | None = None,
+) -> tuple[DetectionResult, list[LayerTiming]]:
+    """Als `detect_all`, maar meet elke laag en levert per-laag-timing.
+
+    - `use_llm=False` (default): alleen regex + spaCy; laag 3 krijgt status
+      `DISABLED`.
+    - `on_layer`: optionele callback die na elke laag-overgang wordt
+      aangeroepen met de timings-tot-nu-toe (incl. een `RUNNING`-entry voor
+      de laag die nu draait). Hiermee kan de UI live updaten.
 
     Latere lagen die met eerdere overlappen worden gedropt — dit is de
     "earlier-layer-wins"-regel die ervoor zorgt dat een spaCy-NAME niet
     een al gedetecteerde BSN kan opslokken.
     """
     effective_thresholds = thresholds if thresholds is not None else Thresholds.from_db()
+    timings: list[LayerTiming] = []
 
+    def _emit(running: LayerTiming | None = None) -> None:
+        if on_layer is not None:
+            on_layer([*timings, running] if running is not None else list(timings))
+
+    # Laag 1 — regex (deterministisch, altijd beschikbaar).
+    _emit(LayerTiming(DetectionLayer.REGEX, LayerStatus.RUNNING, None, 0))
+    start = perf_counter()
     regex_entities = detect_regex(text)
-    spacy_entities = detect_spacy(text)
-    llm_entities = detect_llm(text) if use_llm else []
+    timings.append(
+        LayerTiming(
+            DetectionLayer.REGEX,
+            LayerStatus.OK,
+            (perf_counter() - start) * 1000.0,
+            len(regex_entities),
+        )
+    )
+    _emit()
+
+    # Laag 2 — spaCy NER.
+    _emit(LayerTiming(DetectionLayer.SPACY, LayerStatus.RUNNING, None, 0))
+    start = perf_counter()
+    spacy_entities, spacy_status = detect_spacy_with_status(text)
+    timings.append(
+        LayerTiming(
+            DetectionLayer.SPACY,
+            spacy_status,
+            (perf_counter() - start) * 1000.0,
+            len(spacy_entities),
+        )
+    )
+    _emit()
+
+    # Laag 3 — lokaal LLM (optioneel).
+    if use_llm:
+        _emit(LayerTiming(DetectionLayer.LLM, LayerStatus.RUNNING, None, 0))
+        start = perf_counter()
+        llm_entities, llm_status = detect_llm_with_status(text)
+        timings.append(
+            LayerTiming(
+                DetectionLayer.LLM,
+                llm_status,
+                (perf_counter() - start) * 1000.0,
+                len(llm_entities),
+            )
+        )
+    else:
+        llm_entities = []
+        timings.append(LayerTiming(DetectionLayer.LLM, LayerStatus.DISABLED, None, 0))
+    _emit()
 
     merged = _merge_cross_layer((regex_entities, spacy_entities, llm_entities))
-    return _route_by_threshold(merged, effective_thresholds)
+    return _route_by_threshold(merged, effective_thresholds), timings
 
 
 def _merge_cross_layer(

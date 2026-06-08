@@ -1,4 +1,4 @@
-"""Pylades — Prompts-pagina.
+"""Pylades — Opdrachten-pagina.
 
 CRUD over `templates`-tabel + per-EntityType pseudonimiseringsmodus
 (BR-C06). De inhoudelijke logica zit in `proxy/templates.py` en
@@ -43,10 +43,10 @@ from proxy.templates import (
 )
 from shared.models import EntityType, PseudonymizationMode, Template
 
-st.title("Prompts")
+st.title("Opdrachten")
 
 _OVERRIDE_OPTIONS = (
-    "Gebruik prompt-default",
+    "Gebruik opdracht-default",
     "One-way",
     "Two-way",
 )
@@ -93,10 +93,10 @@ def _has_any_two_way(
 def _render_overview() -> None:
     templates = list_templates()
     if not templates:
-        st.info("Nog geen prompts. Maak er een aan in het tabblad Bewerken.")
+        st.info("Nog geen opdrachten. Maak er een aan in het tabblad Bewerken.")
         return
     st.caption(
-        f"{len(templates)} prompt(s) opgeslagen. "
+        f"{len(templates)} opdracht(en) opgeslagen. "
         "Volgorde bepaalt de weergave op Home."
     )
     last_idx = len(templates) - 1
@@ -197,13 +197,13 @@ def _render_mode_table(
 
 
 def _sync_mode_widget_state(selected_id: int | None, existing: Template | None) -> None:
-    """Reset de modus-widget-keys zodra de gekozen prompt wisselt.
+    """Reset de modus-widget-keys zodra de gekozen opdracht wisselt.
 
     Streamlit's widget-protocol geeft `st.session_state[key]` voorrang op
     een `index=` of `value=`-parameter. Zonder deze synchronisatie blijven
-    eerdere keuzes (van + Nieuwe prompt of een ander #id) plakken in de
-    selectboxen voor Prompt-default en per-EntityType-overrides, en
-    matchen die niet meer met wat in de DB voor deze prompt staat.
+    eerdere keuzes (van + Nieuwe opdracht of een ander #id) plakken in de
+    selectboxen voor Opdracht-default en per-EntityType-overrides, en
+    matchen die niet meer met wat in de DB voor deze opdracht staat.
     We detecteren een wisseling via een eigen `_form_last_id`-sentinel.
     """
     sentinel_key = "_template_form_last_id"
@@ -222,10 +222,10 @@ def _sync_mode_widget_state(selected_id: int | None, existing: Template | None) 
 
 def _render_editor() -> None:
     templates = list_templates()
-    choices = {"+ Nieuwe prompt": None} | {
+    choices = {"+ Nieuwe opdracht": None} | {
         f"#{t.id} — {t.naam} ({t.groep})": int(t.id or 0) for t in templates
     }
-    selected_label = st.selectbox("Kies prompt", list(choices.keys()))
+    selected_label = st.selectbox("Kies opdracht", list(choices.keys()))
     selected_id = choices[selected_label]
     existing = get_template(selected_id) if selected_id is not None else None
 
@@ -242,7 +242,7 @@ def _render_editor() -> None:
             "LLM model", value=(existing.llm_naam if existing else "claude-opus-4-7")
         )
         prompt_tekst = st.text_area(
-            "Prompt-template",
+            "Opdracht-template",
             value=(existing.prompt_tekst if existing else ""),
             height=160,
             help=(
@@ -276,7 +276,7 @@ def _render_editor() -> None:
 
         st.markdown("### Pseudonimiseringsmodus")
         st.caption(
-            "Drie-laagse resolver: super-default → prompt-default → per-EntityType override. "
+            "Drie-laagse resolver: super-default → opdracht-default → per-EntityType override. "
             "De derde kolom toont resultaat live."
         )
 
@@ -284,7 +284,7 @@ def _render_editor() -> None:
             existing.default_mode if existing else None
         )
         default_label = st.selectbox(
-            "Prompt-default",
+            "Opdracht-default",
             _TEMPLATE_DEFAULT_OPTIONS,
             index=_TEMPLATE_DEFAULT_OPTIONS.index(current_default_label),
             key="template-default",
@@ -335,7 +335,7 @@ def _render_editor() -> None:
 
         new_id = upsert_template(template)
         st.success(
-            f"Prompt **#{new_id}** opgeslagen "
+            f"Opdracht **#{new_id}** opgeslagen "
             f"({'aangepast' if selected_id is not None else 'nieuw'})."
         )
         st.rerun()
@@ -345,7 +345,7 @@ def _render_validation_error(exc: ValidationError, two_way_required: bool) -> No
     if two_way_required:
         st.error("BR-C06: zodra ergens TWO_WAY actief is, is een onderbouwing verplicht.")
     else:
-        st.error("Prompt-validatie faalde:")
+        st.error("Opdracht-validatie faalde:")
     for err in exc.errors():
         loc = ".".join(str(p) for p in err.get("loc", []))
         msg: Any = err.get("msg", "")

@@ -8,7 +8,7 @@ Anthropic. Tests in `tests/test_proxy.py` controleren elke takking.
 V0.3-scope (zie PLAN §15a):
 - Eigen body-contract `{template_id, dossier, resume_session}` — *geen*
   Anthropic-pass-through meer.
-- Prompt-template is verplichte API-parameter; server stelt de prompt
+- Opdracht-template is verplichte API-parameter; server stelt de opdracht
   zelf samen via `{input}`-substitutie.
 - `model`, `provider` en `max_tokens` komen uitsluitend uit de template.
 - Anthropic-only (`llm_provider != "anthropic"` → 501); block-content
@@ -333,7 +333,7 @@ def _assemble_prompt_or_raise(template: Template, dossier: str) -> str:
             status_code=500,
             detail=(
                 f"Template {template.id} heeft een lege prompt_tekst; "
-                "open hem in de Prompts-pagina en voeg een opdracht + {input} toe."
+                "open hem op de pagina Opdrachten en voeg een opdracht + {input} toe."
             ),
         )
     if "{input}" not in template.prompt_tekst:

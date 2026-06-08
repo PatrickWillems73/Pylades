@@ -15,12 +15,12 @@ Pylades draait twee processen naast elkaar op `localhost`:
 
 - **FastAPI proxy** op `:8080` — luistert op het pad `POST /v1/messages` met
   een **eigen body-contract** (`template_id` + `dossier`, geen
-  Anthropic-pass-through), pseudonimiseert prompts vóór verzending naar
+  Anthropic-pass-through), pseudonimiseert opdrachten vóór verzending naar
   Anthropic en de-pseudonimiseert de response voor `TWO_WAY` entities. De
   teruggegeven response blijft Anthropic-vormig.
 - **Streamlit UI** op `:8501` — Home (testrun-flow voor zowel technische
   als niet-technische gebruikers met Compact/Uitgebreid-modus), Status,
-  Prompts, Review-queue, Audit en Config.
+  Opdrachten, Review-queue, Audit en Config.
 
 Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
 
@@ -48,7 +48,7 @@ Pylades zit **tussen** jouw applicatie en een extern LLM. Voordat tekst het netw
    wordt PC2, leeftijd ≥90 wordt `"90+"`.
 3. **Pseudonimiseert** wat overblijft — deterministische HMAC-pseudoniemen,
    opgeslagen in een aparte vault-database.
-4. **Stuurt** alleen de geanonimiseerde prompt naar Anthropic.
+4. **Stuurt** alleen de geanonimiseerde opdracht naar Anthropic.
 5. **De-pseudonimiseert** — alleen voor entities die als `TWO_WAY` zijn
    geconfigureerd — het antwoord voordat het teruggaat naar de caller.
 
@@ -62,10 +62,10 @@ Alles wat binnenkomt en uitgaat wordt gelogd in een audit trail.
 Jouw app  →  Pylades proxy (:8080)  →  Anthropic API
                   ↓
             Streamlit UI (:8501)
-            Home (testrun) · Status · Prompts · Review-queue · Audit · Config
+            Home (testrun) · Status · Opdrachten · Review-queue · Audit · Config
 ```
 
-1. Je kiest een **template** (prompt + entity-configuratie) in de UI of via
+1. Je kiest een **template** (opdracht + entity-configuratie) in de UI of via
    `template_id` in de API-call.
 2. Pylades verwerkt je **dossier**-tekst door de detectie-, generalisatie- en
    pseudonimisatiepipeline.
@@ -118,7 +118,7 @@ zorgdata is formele FG/DPO-toetsing verplicht.**
 
 ## Bekende v0.3-beperking
 
-De originele prompt wordt **plaintext** opgeslagen in
+De originele opdracht wordt **plaintext** opgeslagen in
 `audit_log.original_prompt` binnen `pylades-content.db`. Compromis van alleen
 de content-DB lekt daardoor de oorspronkelijke gevoelige inhoud, zelfs zonder
 toegang tot de vault.
@@ -337,7 +337,7 @@ Korte uitleg van wat Streamlit daar mee bedoelt:
 
 Stuur een request naar de proxy met het v0.3-bodycontract — `template_id`
 en `dossier` zijn verplicht; `model`, `max_tokens` en `provider` leven
-server-side op de gekozen prompt-template en kunnen door de client niet
+server-side op de gekozen opdracht-template en kunnen door de client niet
 overruled worden:
 
 ```bash
@@ -349,7 +349,7 @@ curl -X POST http://localhost:8080/v1/messages \
   }'
 ```
 
-De server stelt de prompt zelf samen door `{input}` in
+De server stelt de opdracht zelf samen door `{input}` in
 `Template.prompt_tekst` te vervangen door je dossier-tekst.
 
 Wanneer detectie low-confidence items vindt, retourneert de proxy
@@ -411,7 +411,7 @@ Wat er nu staat (release v0.2.2):
 - Volledige proxy-pipeline: detect → generalize → pseudonymize → Anthropic →
   de-pseudonymize
 - Streamlit UI: Home (testrun-flow met Compact/Uitgebreid-modus), Status,
-  Prompts, Review-queue, Audit, Config
+  Opdrachten, Review-queue, Audit, Config
 - Volledige geautomatiseerde testsuite groen (`uv run pytest tests/ -v`)
 - Demo-scenario in [DEMO.md](DEMO.md)
 - Template-vlag `use_llm` om laag 3 (Ollama) per template aan/uit te zetten
@@ -472,7 +472,7 @@ Conventies:
 [Streamlit UI :8501]
    ├─► Home            (testrun-flow; Compact + Uitgebreid)
    ├─► Status          (proxy/Ollama/spaCy/DB-health)
-   ├─► Prompts       (per-EntityType modus-override)
+   ├─► Opdrachten       (per-EntityType modus-override)
    ├─► Review-queue    (manual review)
    ├─► Audit           (recente requests)
    └─► Config          (thresholds, super-default, generalisering, rotatie)
@@ -487,7 +487,7 @@ Buiten scope van v0.3, expliciet geadresseerd in v1.0:
 - **Multi-tenancy en authenticatie** — UI + proxy, rol-gebaseerde autorisatie
   voor de-pseudonimisering (BR-H01)
 - **Encryptie at rest** — `pylades-content.db` en/of `original_prompt_hash`
-  i.p.v. plaintext audit-prompts
+  i.p.v. plaintext audit-opdrachten
 - **Provider-agnostiek** — OpenAI, Google, on-premise modellen via adapter-laag
 - **Medisch NER** (BR-A03) — gespecialiseerd model naast regex/spaCy
 - **K-anonimiteit + l-diversity** (BR-D-serie) — statistische privacy-garanties

@@ -4,7 +4,7 @@ Splitten we doelbewust van `ui/Home.py` af zodat we de logica met `pytest`
 kunnen valideren zonder Streamlit-context. De Streamlit-pagina blijft een
 dunne presentatielaag bovenop deze helpers.
 
-Sinds doelversie v0.3 (PLAN §15a) heeft een prompt-template exact één
+Sinds doelversie v0.3 (PLAN §15a) heeft een opdracht-template exact één
 placeholder `{input}`; deze module bevat de substitutie-helper, de dry-run-
 orkestrator en de plain-language-vertalingen die de UI gebruikt voor de
 samenvattingskaart, entiteit-kaartjes, curl-equivalent en privacy-rapport-
@@ -14,15 +14,21 @@ export.
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from proxy.audit import get_logs_by_session
-from proxy.detection import detect_all
+from proxy.detection import (
+    LayerStatus,
+    LayerTiming,
+    detect_all_timed,
+)
 from proxy.generalization import generalize_all
 from proxy.mapping import list_entities_for_session
 from proxy.pseudonymization import (
@@ -35,6 +41,7 @@ from shared.config import settings
 from shared.crypto import derive_session_key, load_or_create_secret, make_pseudonym
 from shared.models import (
     AuditEntry,
+    DetectionLayer,
     Entity,
     PseudonymizationMode,
     Template,
@@ -70,17 +77,32 @@ class AnalysisResult:
 
 
 def analyze_prompt(template: Template, dossier: str) -> AnalysisResult:
-    """Detect → generalize → dry-run pseudonimiseren, zonder vault-writes.
+    """Detect → generalize → dry-run pseudonimiseren, zonder vault-writes."""
+    result, _timings = analyze_prompt_timed(template, dossier)
+    return result
+
+
+def analyze_prompt_timed(
+    template: Template,
+    dossier: str,
+    *,
+    on_layer: Callable[[list[LayerTiming]], None] | None = None,
+) -> tuple[AnalysisResult, list[LayerTiming]]:
+    """Als `analyze_prompt`, maar levert per-detectielaag-timing terug.
 
     Stelt de prompt eerst samen via `fill_input`. Genereert een verse
     `session_id` per analyse zodat het preview-resultaat losstaat van
     eerdere sessies en geen rest-state van vorige clicks toont. De
-    daadwerkelijke verstuur-flow gebruikt een eigen session_id en doet
-    de echte (persisterende) pijplijn via de proxy.
+    `on_layer`-callback wordt doorgegeven aan de detectie-orkestrator zodat
+    de UI live per laag kan updaten.
     """
     assembled = fill_input(template.prompt_tekst, dossier)
     session_id = uuid.uuid4().hex
-    detection = detect_all(assembled, use_llm=template.use_llm)
+    detection, timings = detect_all_timed(
+        assembled,
+        use_llm=template.use_llm,
+        on_layer=on_layer,
+    )
     gen_text, gen_entities = generalize_all(assembled, detection.confident_entities)
     pseudo_text, annotated = pseudonymize_dry_run(
         gen_text,
@@ -88,13 +110,185 @@ def analyze_prompt(template: Template, dossier: str) -> AnalysisResult:
         session_id,
         template,
     )
-    return AnalysisResult(
-        session_id=session_id,
-        original=assembled,
-        generalized=gen_text,
-        pseudonymized=pseudo_text,
-        entities=annotated,
-        pending_review=list(detection.pending_review),
+    return (
+        AnalysisResult(
+            session_id=session_id,
+            original=assembled,
+            generalized=gen_text,
+            pseudonymized=pseudo_text,
+            entities=annotated,
+            pending_review=list(detection.pending_review),
+        ),
+        timings,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Voortgangsindicator — één blok, altijd actueel, altijd dezelfde plek
+# ---------------------------------------------------------------------------
+
+
+class StepStatus(StrEnum):
+    """Status van één stap in de voortgangsindicator van een opdracht-run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    DISABLED = "disabled"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressStep:
+    """Eén regel in de voortgangsindicator (een detectielaag of het extern LLM)."""
+
+    label: str
+    status: StepStatus
+    duration_ms: float | None = None
+    note: str | None = None
+
+
+def format_duration_ms(ms: float | None) -> str:
+    """Toon milliseconden met punt-duizendtalscheiding, bv. ``24ms`` / ``23.452ms``."""
+    if ms is None:
+        return ""
+    rounded = int(round(ms))
+    return f"{rounded:,}".replace(",", ".") + "ms"
+
+
+def _spacy_layer_label() -> str:
+    """``NER (spaCy md)`` uit ``settings.spacy_model`` (``nl_core_news_md``)."""
+    model = settings.spacy_model
+    suffix = model.rsplit("_", 1)[-1] if "_" in model else model
+    return f"NER (spaCy {suffix})"
+
+
+def external_llm_label(template: Template) -> str:
+    """``Extern LLM via Pylades proxy (claude-opus-4-7)`` op basis van het template."""
+    return f"Extern LLM via Pylades proxy ({template.llm_naam})"
+
+
+_LAYER_STATUS_TO_STEP: dict[LayerStatus, StepStatus] = {
+    LayerStatus.RUNNING: StepStatus.RUNNING,
+    LayerStatus.OK: StepStatus.DONE,
+    LayerStatus.DISABLED: StepStatus.DISABLED,
+    LayerStatus.UNAVAILABLE: StepStatus.UNAVAILABLE,
+}
+
+
+def _detection_step(timing: LayerTiming) -> ProgressStep:
+    if timing.layer is DetectionLayer.REGEX:
+        label = "Dryrun identificatielaag RegEx"
+    elif timing.layer is DetectionLayer.SPACY:
+        label = f"Dryrun identificatielaag {_spacy_layer_label()}"
+    else:
+        label = f"Dryrun identificatielaag intern LLM ({settings.ollama_model})"
+
+    note: str | None = None
+    if timing.status is LayerStatus.DISABLED:
+        note = "staat uit in deze opdracht"
+    elif timing.status is LayerStatus.UNAVAILABLE:
+        note = "niet beschikbaar"
+
+    return ProgressStep(
+        label=label,
+        status=_LAYER_STATUS_TO_STEP[timing.status],
+        duration_ms=timing.duration_ms,
+        note=note,
+    )
+
+
+def progress_steps(
+    timings: Iterable[LayerTiming],
+    template: Template,
+    *,
+    external: ProgressStep | None = None,
+) -> list[ProgressStep]:
+    """Bouw de volledige stappenlijst: detectielagen + extern-LLM-stap.
+
+    `external` mag het externe-LLM-resultaat meegeven; zonder argument
+    krijgt die stap status `PENDING` ("nog niet verstuurd").
+    """
+    steps = [_detection_step(t) for t in timings]
+    steps.append(
+        external
+        if external is not None
+        else ProgressStep(external_llm_label(template), StepStatus.PENDING)
+    )
+    return steps
+
+
+def external_step_from_response(
+    *,
+    status: int,
+    latency_ms: float | None,
+    signals: ResponseSignals,
+    template: Template,
+) -> ProgressStep:
+    """Externe-LLM-stap afgeleid uit een proxy-response."""
+    label = external_llm_label(template)
+    if status == 200:
+        note = (
+            "inclusief stap 1 t/m 3"
+            if signals.ok
+            else "antwoord onbruikbaar — inclusief stap 1 t/m 3"
+        )
+        return ProgressStep(label, StepStatus.DONE, duration_ms=latency_ms, note=note)
+    if status == 0:
+        return ProgressStep(label, StepStatus.UNAVAILABLE, note="geen verbinding met de proxy")
+    if status == 423:
+        return ProgressStep(
+            label,
+            StepStatus.PENDING,
+            note="nog niet aangeroepen — wacht op jouw beoordeling",
+        )
+    return ProgressStep(label, StepStatus.UNAVAILABLE, note=f"HTTP {status}")
+
+
+def with_external_step(
+    steps: Iterable[ProgressStep],
+    external: ProgressStep,
+) -> list[ProgressStep]:
+    """Vervang de laatste (externe-LLM-)stap; behoud de detectielagen ervoor."""
+    detection = [s for s in steps if not _is_external_label(s.label)]
+    return [*detection, external]
+
+
+def _is_external_label(label: str) -> bool:
+    return label.startswith("Extern LLM")
+
+
+def _step_status_text(step: ProgressStep) -> str:
+    if step.status is StepStatus.DONE:
+        duration = format_duration_ms(step.duration_ms)
+        base = f"✓ {duration}" if duration else "✓"
+        return f"{base} ({step.note})" if step.note else base
+    if step.status is StepStatus.RUNNING:
+        return step.note or "bezig…"
+    if step.status is StepStatus.DISABLED:
+        return f"({step.note})" if step.note else "(staat uit in deze opdracht)"
+    if step.status is StepStatus.UNAVAILABLE:
+        return f"({step.note})" if step.note else "(niet beschikbaar)"
+    return f"({step.note})" if step.note else "nog niet verstuurd"
+
+
+def progress_panel_html(steps: list[ProgressStep]) -> str:
+    """Render de voortgangsindicator als één HTML-blok (pure functie, testbaar)."""
+    rows: list[str] = []
+    for idx, step in enumerate(steps, start=1):
+        status_text = _step_status_text(step)
+        rows.append(
+            f'<li class="pylades-progress__row pylades-progress__row--{step.status.value}">'
+            f'<span class="pylades-progress__step">Stap {idx}</span>'
+            f'<span class="pylades-progress__label">{html.escape(step.label)}</span>'
+            f'<span class="pylades-progress__status">{html.escape(status_text)}</span>'
+            "</li>"
+        )
+    return (
+        '<div class="pylades-progress">'
+        '<div class="pylades-progress__title">Voortgang verwerking opdracht</div>'
+        '<ol class="pylades-progress__list">' + "".join(rows) + "</ol>"
+        "</div>"
     )
 
 
@@ -110,21 +304,24 @@ def _entity_from_review_item(item: ReviewItem) -> Entity:
     )
 
 
-def _position_entities_in_text(text: str, entities: list[Entity]) -> list[Entity]:
-    """Zoek voorkomens in `text` zodat pseudonimisering geldige spans heeft."""
-    positioned: list[Entity] = []
-    search_from = 0
-    for ent in entities:
-        idx = text.find(ent.original, search_from)
-        if idx < 0:
-            idx = text.find(ent.original)
-        if idx >= 0:
-            end = idx + len(ent.original)
-            positioned.append(ent.model_copy(update={"start": idx, "end": end}))
-            search_from = max(search_from, end)
-        else:
-            positioned.append(ent)
-    return positioned
+def _safe_substitute(text: str, spans: list[tuple[int, int, str]]) -> str:
+    """Vervang `(start, end, vervanging)`-spans zonder te crashen op overlap.
+
+    Overlappende spans (kan ontstaan als een entiteit-tekst meermaals of
+    binnen een andere entiteit voorkomt) worden overgeslagen i.p.v. een
+    ``ValueError`` te gooien, zodat de preview nooit terugvalt op
+    niet-gepseudonimiseerde tekst.
+    """
+    parts: list[str] = []
+    last = 0
+    for start, end, replacement in sorted(spans, key=lambda s: s[0]):
+        if start < last:
+            continue
+        parts.append(text[last:start])
+        parts.append(replacement)
+        last = end
+    parts.append(text[last:])
+    return "".join(parts)
 
 
 def _annotate_entities_for_display(
@@ -133,24 +330,38 @@ def _annotate_entities_for_display(
     session_id: str,
     template: Template,
 ) -> tuple[str, list[Entity]]:
-    """Pseudoniemen + preview-tekst voor de UI (zonder vault-writes)."""
+    """Pseudoniemen + preview-tekst voor de UI (zonder vault-writes).
+
+    Alle entiteiten krijgen een pseudoniem (voor de "Beschermde gegevens"-
+    lijst). In de preview-tekst vervangen we alleen entiteiten die we
+    daadwerkelijk in `text` terugvinden; niet-gevonden of overlappende
+    voorkomens worden overgeslagen i.p.v. de hele tekst onvervangen te laten.
+    """
     if not entities:
         return text, []
-    positioned = _position_entities_in_text(text, entities)
-    try:
-        return pseudonymize_dry_run(text, positioned, session_id, template)
-    except ValueError:
-        super_default = get_super_default_pseudonymization_mode()
-        secret = load_or_create_secret(settings.global_secret_path)
-        session_key = derive_session_key(secret, session_id)
-        annotated: list[Entity] = []
-        for ent in entities:
-            mode = resolve_effective_mode(template, ent.entity_type, super_default)
-            pseudo = make_pseudonym(session_key, ent.original, ent.entity_type)
-            annotated.append(
-                ent.model_copy(update={"pseudonym": pseudo, "effective_mode": mode}),
-            )
-        return text, annotated
+
+    super_default = get_super_default_pseudonymization_mode()
+    secret = load_or_create_secret(settings.global_secret_path)
+    session_key = derive_session_key(secret, session_id)
+
+    annotated: list[Entity] = []
+    spans: list[tuple[int, int, str]] = []
+    search_from = 0
+    for ent in entities:
+        mode = resolve_effective_mode(template, ent.entity_type, super_default)
+        pseudo = make_pseudonym(session_key, ent.original, ent.entity_type)
+        annotated.append(
+            ent.model_copy(update={"pseudonym": pseudo, "effective_mode": mode}),
+        )
+        idx = text.find(ent.original, search_from)
+        if idx < 0:
+            idx = text.find(ent.original)
+        if idx >= 0:
+            end = idx + len(ent.original)
+            spans.append((idx, end, pseudo))
+            search_from = max(search_from, end)
+
+    return _safe_substitute(text, spans), annotated
 
 
 def reconcile_analysis_for_display(
@@ -243,6 +454,7 @@ def summarize_for_lay_user(
     *,
     response_status: int | None = None,
     session_resolved: bool = False,
+    run_phase: RunPhase | None = None,
 ) -> LaySummary:
     """Bouw een leesbare samenvatting van een testrun.
 
@@ -252,6 +464,9 @@ def summarize_for_lay_user(
 
     `session_resolved=True` corrigeert een achtergebleven HTTP 423 na
     afhandeling van de review-queue voor deze sessie.
+
+    `run_phase=FAILED` voorkomt dat een lege HTTP 200 als succes wordt
+    getoond in de samenvattingsregel.
     """
     protected = len(result.entities)
     two_way = sum(
@@ -265,7 +480,9 @@ def summarize_for_lay_user(
         parts.append(_plural(two_way, "naam vertaald terug", "namen vertaald terug"))
     if pending:
         parts.append(_plural(pending, "wacht op beoordeling", "wachten op beoordeling"))
-    if response_status is not None:
+    if run_phase == RunPhase.FAILED:
+        parts.append(_failed_status_phrase(response_status))
+    elif response_status is not None:
         parts.append(_status_phrase(response_status, session_resolved=session_resolved))
 
     return LaySummary(
@@ -278,6 +495,18 @@ def summarize_for_lay_user(
 
 def _plural(count: int, singular: str, plural: str) -> str:
     return f"{count} {singular if count == 1 else plural}"
+
+
+def _failed_status_phrase(status: int | None) -> str:
+    if status == 0:
+        return "geen verbinding met de proxy"
+    if status == 200:
+        return "versturen mislukt — geen bruikbaar antwoord"
+    if status is not None and status >= 500:
+        return f"fout bij het externe LLM (HTTP {status})"
+    if status is not None and status >= 400:
+        return f"fout (HTTP {status})"
+    return "versturen mislukt"
 
 
 def _status_phrase(status: int, *, session_resolved: bool = False) -> str:
@@ -412,6 +641,190 @@ def response_signals(status: int, payload: Any) -> ResponseSignals:
     )
 
 
+class RunPhase(StrEnum):
+    """Fase van de testrun-flow op Home — één bron voor knoppen én status-strips."""
+
+    IDLE = "idle"
+    REVIEW_PENDING = "review_pending"
+    READY_TO_SEND = "ready_to_send"
+    COMPLETE = "complete"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class RunPhaseContext:
+    """Afgeleide UI-context voor actieknoppen en samenvattingsstrip."""
+
+    phase: RunPhase
+    resume_session: str | None
+    send_button_label: str | None
+    send_status_message: str = "Versturen naar extern LLM - dit kan even duren…"
+    show_resume_ready_banner: bool = False
+    show_complete_banner: bool = False
+    show_failed_banner: bool = False
+    response_signals: ResponseSignals | None = None
+    response_status: int | None = None
+
+
+def compute_run_phase(
+    *,
+    analysis: AnalysisResult | None,
+    display_analysis: AnalysisResult | None,
+    session_id: str | None,
+    session_resolved: bool,
+    response_record: dict[str, Any] | None,
+) -> RunPhaseContext:
+    """Bepaal run-fase uit analyse, review-state en proxy-response.
+
+    Scheidt ``session_resolved`` (review klaar) van ``COMPLETE`` (HTTP 200
+    met bruikbaar antwoord), zodat de hervat-knop verdwijnt na succes.
+    """
+    response_status = response_record.get("status") if response_record else None
+    signals: ResponseSignals | None = None
+    if response_record is not None and response_status is not None:
+        signals = response_signals(response_status, response_record.get("payload"))
+
+    pending = display_analysis.pending_review if display_analysis else []
+    if pending and not session_resolved:
+        return RunPhaseContext(
+            phase=RunPhase.REVIEW_PENDING,
+            resume_session=None,
+            send_button_label=None,
+            response_signals=signals,
+            response_status=response_status,
+        )
+
+    if signals is not None and response_status is not None:
+        if response_status == 200 and signals.ok:
+            return RunPhaseContext(
+                phase=RunPhase.COMPLETE,
+                resume_session=None,
+                send_button_label=None,
+                show_complete_banner=True,
+                response_signals=signals,
+                response_status=response_status,
+            )
+        if response_status == 200 and not signals.ok:
+            resume = session_id if session_resolved else None
+            return RunPhaseContext(
+                phase=RunPhase.FAILED,
+                resume_session=resume,
+                send_button_label="Opnieuw proberen",
+                send_status_message=(
+                    "Opnieuw versturen naar extern LLM - dit kan even duren…"
+                ),
+                show_failed_banner=True,
+                response_signals=signals,
+                response_status=response_status,
+            )
+        if response_status == 423:
+            if session_resolved and session_id:
+                return RunPhaseContext(
+                    phase=RunPhase.READY_TO_SEND,
+                    resume_session=session_id,
+                    send_button_label="Hervat naar extern LLM",
+                    send_status_message=(
+                        "Hervatten naar extern LLM - dit kan even duren…"
+                    ),
+                    show_resume_ready_banner=True,
+                    response_signals=signals,
+                    response_status=response_status,
+                )
+            return RunPhaseContext(
+                phase=RunPhase.REVIEW_PENDING,
+                resume_session=None,
+                send_button_label=None,
+                response_signals=signals,
+                response_status=response_status,
+            )
+        if response_status == 0 or (
+            response_status >= 400 and response_status != 423
+        ):
+            resume = session_id if session_resolved else None
+            return RunPhaseContext(
+                phase=RunPhase.FAILED,
+                resume_session=resume,
+                send_button_label="Opnieuw proberen",
+                send_status_message=(
+                    "Opnieuw versturen naar extern LLM - dit kan even duren…"
+                ),
+                show_failed_banner=True,
+                response_signals=signals,
+                response_status=response_status,
+            )
+
+    if session_resolved and session_id:
+        return RunPhaseContext(
+            phase=RunPhase.READY_TO_SEND,
+            resume_session=session_id,
+            send_button_label="Hervat naar extern LLM",
+            send_status_message="Hervatten naar extern LLM - dit kan even duren…",
+            show_resume_ready_banner=True,
+            response_status=response_status,
+        )
+
+    if analysis is not None:
+        return RunPhaseContext(
+            phase=RunPhase.READY_TO_SEND,
+            resume_session=None,
+            send_button_label="Verstuur naar extern LLM",
+            response_status=response_status,
+        )
+
+    return RunPhaseContext(
+        phase=RunPhase.IDLE,
+        resume_session=None,
+        send_button_label=None,
+        response_status=response_status,
+    )
+
+
+def accent_strip_class_for_run_phase(phase: RunPhase) -> str:
+    """Linkerrand-kleur voor de samenvattingsstrip — zelfde fases als actieknoppen."""
+    if phase == RunPhase.REVIEW_PENDING:
+        return "pylades-accent-strip pylades-accent-strip--attention"
+    if phase == RunPhase.FAILED:
+        return "pylades-accent-strip pylades-accent-strip--error"
+    return "pylades-accent-strip pylades-accent-strip--ok"
+
+
+def analysis_caption_for_run_phase(ctx: RunPhaseContext) -> str:
+    """Ondertitel onder de samenvattingsregel — aligned met ``compute_run_phase``."""
+    if ctx.phase == RunPhase.COMPLETE:
+        return "Antwoord ontvangen van het externe LLM."
+    if ctx.phase == RunPhase.FAILED:
+        if ctx.response_status == 0:
+            return "Geen verbinding met de proxy — probeer opnieuw."
+        if ctx.response_status == 200 and ctx.response_signals:
+            if ctx.response_signals.is_refusal:
+                return (
+                    "Het externe LLM weigerde — je kunt opnieuw proberen "
+                    "of het dossier aanpassen."
+                )
+            if ctx.response_signals.is_empty:
+                return (
+                    "Antwoord was leeg — je kunt opnieuw proberen of "
+                    "max_tokens verhogen."
+                )
+            if ctx.response_signals.is_truncated:
+                return (
+                    "Antwoord was afgebroken — verhoog max_tokens of "
+                    "probeer opnieuw."
+                )
+        return "Versturen mislukt — probeer opnieuw."
+    if ctx.phase == RunPhase.READY_TO_SEND and ctx.resume_session:
+        return "Review afgehandeld — je kunt nu naar het externe LLM versturen."
+    if ctx.response_status == 423:
+        return (
+            "De proxy wacht op review-beslissingen voordat er iets naar het "
+            "externe LLM gaat."
+        )
+    return (
+        "Veilige voorbeeld-analyse — er is nog niets verstuurd naar het "
+        "externe LLM en niets opgeslagen."
+    )
+
+
 def extract_assistant_text(payload: Any) -> str:
     """Trek de assistant-tekst uit een Anthropic Messages-response.
 
@@ -514,7 +927,7 @@ def build_privacy_report_md(
     lines.append("# Pylades — privacy-rapport")
     lines.append("")
     lines.append(
-        f"- **Prompt:** {context.template_groep} / {context.template_naam}"
+        f"- **Opdracht:** {context.template_groep} / {context.template_naam}"
     )
     lines.append(f"- **Sessie-id:** `{context.session_id}`")
     if context.response_status is not None:

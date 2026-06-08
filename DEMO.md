@@ -77,7 +77,7 @@ curl -sS -X POST http://localhost:8080/v1/messages \
 1. Open **Audit**. Bovenaan staat de zojuist binnengekomen rij met
    status `ok`.
 2. Klik in het detail-overzicht op het entry-id. De vier tabs tonen:
-   - **Origineel** — je samengestelde prompt (template-opdracht +
+   - **Origineel** — je samengestelde opdracht (template-opdracht +
      dossier) met BSN en postcode plaintext.
    - **Pseudonimized** — dezelfde tekst, maar BSN en PC6 vervangen door
      pseudoniemen.
@@ -95,7 +95,7 @@ curl -sS -X POST http://localhost:8080/v1/messages \
 **Doel.** Laat detectie expres twijfelen door een naam zonder context,
 los het op via de Review-queue, hervat de sessie.
 
-### Stuur een twijfelachtige prompt
+### Stuur een twijfelachtige opdracht
 
 ```bash
 curl -i -X POST http://localhost:8080/v1/messages \
@@ -150,7 +150,7 @@ curl -sS -X POST http://localhost:8080/v1/messages \
 ```
 
 Nu antwoordt de proxy met HTTP 200 en de geaccepteerde naam is in de
-upstream prompt vervangen door `[PER-xxxxxx]`. In **Audit** verschijnt
+upstream opdracht vervangen door `[PER-xxxxxx]`. In **Audit** verschijnt
 een rij met status `ok` en hetzelfde `session_id` als de eerste 423-call.
 
 ---
@@ -164,12 +164,12 @@ blijft als pseudoniem staan.
 
 ### Maak het template aan via de UI
 
-1. Open **Prompts** → tab **Bewerken**, kies **+ Nieuwe prompt**.
+1. Open **Opdrachten** → tab **Bewerken**, kies **+ Nieuwe opdracht**.
 2. Vul in:
    - Groep: `demo`
    - Naam: `mixed-overrides`
    - Provider: `anthropic`, Model: `claude-opus-4-7`
-   - Prompt-tekst: `Vat de zin samen: {input}`
+   - Opdrachttekst: `Vat de zin samen: {input}`
    - Max tokens: `256`
    - Template-default modus: laat leeg (→ super-default ONE_WAY).
    - In de overrides-tabel: zet rij `NAME` op **TWO_WAY**.
@@ -178,7 +178,7 @@ blijft als pseudoniem staan.
 3. Klik **Opslaan**. Noteer het toegekende `id` (zichtbaar in de
    overzichts-tab).
 
-### Stuur de prompt
+### Stuur de opdracht
 
 ```bash
 curl -sS -X POST http://localhost:8080/v1/messages \

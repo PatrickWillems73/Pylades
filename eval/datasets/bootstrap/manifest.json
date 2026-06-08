@@ -1,0 +1,14 @@
+{
+  "version": "bootstrap-v1",
+  "dataset_file": "dataset.jsonl",
+  "sha256": "e2daf0424787f4d139daee547e88630082be53be05ae83c3c47f6da7c051391b",
+  "record_count": 10,
+  "seed": 0,
+  "generator": "bootstrap.py (offline, deterministisch)",
+  "git_sha": "a75b30f",
+  "created_at": "2026-06-07T10:32:55.906872+00:00",
+  "warnings": [
+    "rare_icd: zeldzame ICD-code 'G71.0' (BR-B05 review-kandidaat)"
+  ],
+  "entity_count": 28
+}

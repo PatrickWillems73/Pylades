@@ -96,9 +96,9 @@ te lossen.
 - **Proxy** (FastAPI, poort 8080) — zet gevoelige tekst om in pseudoniemen
   voordat hij naar het externe LLM gaat en vertaalt selectief terug op de
   response.
-- **UI** (Streamlit, poort 8501) — testruns, prompts, review-queue,
+- **UI** (Streamlit, poort 8501) — testruns, opdrachten, review-queue,
   audit en configuratie.
-- **Content-DB** (`pylades-content.db`) — prompts, audit-log, sessies,
+- **Content-DB** (`pylades-content.db`) — opdrachten, audit-log, sessies,
   review-queue, configuratie.
 - **Vault-DB** (`pylades-vault.db`, file-mode `0o600`) — pseudoniem ↔
   origineel mappings.

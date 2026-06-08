@@ -86,7 +86,7 @@ def _row_dict(entry: AuditEntry) -> dict[str, str]:
         "template_id": str(entry.template_id) if entry.template_id is not None else "",
         "provider/model": f"{entry.llm_provider or '—'} / {entry.llm_model or '—'}",
         "avg_conf": (f"{entry.avg_confidence:.2f}" if entry.avg_confidence is not None else "—"),
-        "prompt (snippet)": _short(entry.original_prompt),
+        "opdracht (snippet)": _short(entry.original_prompt),
     }
 
 
