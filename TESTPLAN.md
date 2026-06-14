@@ -43,7 +43,7 @@ en een aparte security-suite.
 flowchart TD
   gen["Datageneratie + adversarial (offline, gepind)"] --> dataset["Dataset JSONL + manifest"]
   human["Verificatie: tweede LLM-pass + gerichte mens-review"] --> dataset
-  dataset --> runner["Model-adapters: pylades_md, lg, trf, gliner, deduce"]
+  dataset --> runner["Model-adapters: pylades_md, lg, gliner, deduce"]
   runner --> pipeline["detect_all -> generalize_all -> pseudonymize (dry-run)"]
   pipeline --> metrics["Scoring: span/type PRF, leak-rate, generalisatie, latency"]
   metrics --> report["Rapport JSON/CSV/HTML + git-SHA"]
@@ -53,6 +53,9 @@ flowchart TD
   report --> dpo["FG-auditrapport + restrisico-register"]
 ```
 
+Verificatie (mens/LLM), judge, triage en DPO-deliverables staan in §13 als open.
+De pytest-gate zelf: formeel normal-subset; uitbreiding deduce/150 — §12.
+
 ## 4. Methodologische beslissingen
 
 - **Twee meetniveaus gescheiden.** Ground truth staat op het **detectie**-niveau
@@ -61,15 +64,23 @@ flowchart TD
   (geboortedatum→jaar, PC6→PC2, leeftijd 90+, opnamedatum→maand-jaar).
 - **Span-matching: beide rapporteren** — exacte offset-match én overlap/partial-match
   (correct type + overlappende span). Het verschil maakt randgevoeligheid zichtbaar.
-- **Lek-definitie (hard).** Een lek = een origineel `DIRECT_IDENTIFIER`-substring
-  dat **letterlijk** in de gepseudonimiseerde prompt overblijft. Gegeneraliseerde
-  waarden (jaar, PC2) zijn per design géén lek.
+- **Lek-definitie (hard).** Een lek = een `DIRECT_IDENTIFIER` waarvan de originele
+  span **niet volledig (<100%) gedekt** wordt door detectie-spans (span-dekking,
+  `find_exposed`/`_coverage_fraction` in
+  [eval/metrics/scoring.py](eval/metrics/scoring.py)). Ook **gedeeltelijke**
+  blootstelling telt mee. Een gedetecteerde span is volledig gedekt — of die nu
+  one-way-gepseudonimiseerd óf gegeneraliseerd wordt (jaar, PC2) — en is dus géén
+  lek; ook een span die met een *ander* type wordt gemaskeerd telt als gedekt (de
+  type-fout zelf zit in de PRF/verwarringsmatrix, niet in de lek-KPI).
 - **spaCy-confidence is een vaste constante per label** (`_SPACY_LABEL_CONFIDENCE`
   in [proxy/detection.py](proxy/detection.py)); kalibratie-analyse geldt alleen
   voor modellen met echte scores (GLiNER/Presidio).
-- **Bekende detector-gaten meten.** `ADDRESS` en `DIAGNOSIS` zitten in de
-  `EntityType`-enum ([shared/models.py](shared/models.py)) maar hebben **geen
-  detector**; het harnas meet en rapporteert deze als structurele false-negatives.
+- **Bekende detector-gaten meten.** `DIAGNOSIS` (vrije-tekstdiagnose) heeft
+  **geen detector**; het harnas rapporteert blootstelling als structurele
+  false-negative. `ADDRESS` heeft sinds v0.3 een **beperkte regex-laag**
+  (NL-straat + huisnummer in [proxy/detection.py](proxy/detection.py)); complexe
+  of afwijkende adresvormen blijven een bekend restrisico — meten en rapporteren
+  blijft nodig.
 - **Label-mapping per extern model** (DEDUCE/GLiNER hebben eigen labels) is een
   expliciete adapter-laag én een gedocumenteerd meet-risico.
 
@@ -96,7 +107,7 @@ flowchart TD
    [shared/crypto.py](shared/crypto.py), offset-alignment (`text[start:end] == text`),
    label-in-tekst; afkeuren bij fout.
 4. Verificatie: tweede onafhankelijke LLM-pass, daarna gerichte mens-review op
-   afwijkingen.
+   afwijkingen. *(Stap 4 nog niet geautomatiseerd; zie §13.)*
 
 **Adversariële subset:** 9-cijferig niet-BSN, naam-lijkt-org en omgekeerd, datum
 zonder contextwoord, near-threshold spaCy-namen, zeldzame vs veelvoorkomende
@@ -107,22 +118,41 @@ expliciet vastgelegd voor de FG.
 
 **Omvang:** gefaseerd ~150 (snel itereren) → ~600 (statistisch robuuster).
 
-**Versiebeheer:** dataset onder `eval/datasets/<naam>/` met `manifest.json`
-(versietag + sha256-checksum + seed + generator-info). De dataset wordt **gepind**
+**Versiebeheer:** datasets onder `eval/datasets/<naam>/` met een **manifest**
+(versietag + sha256-checksum + seed + generator-info). Eén map kan meerdere
+datasets bevatten; het harnas koppelt elke dataset aan het manifest waarvan het
+`dataset_file`-veld overeenkomt (`resolve_manifest`), zodat bv. `dataset.jsonl`
+en `dataset-10dossiers.jsonl` niet door elkaar lopen. De dataset wordt **gepind**
 (niet per run hergegenereerd) om run-determinisme te garanderen.
 
 ## 6. Metrics
 
-- Per `EntityType` en per categorie: precision / recall / F1, zowel **span-level**
-  als **type-level** (beide matching-varianten).
-- **Verwarringsmatrix** over `EntityType` (type-verwisselingen / vals-positieven).
+| Metric | Rapport | Gate (pytest) |
+| --- | --- | --- |
+| PRF per type (exact + overlap) | ✅ | — |
+| Verwarringsmatrix | ✅ | — |
+| Leak-rate `DIRECT_IDENTIFIER` | ✅ | ✅ (zie §12) |
+| Exposure quasi/clinical | ✅ | — |
+| Over-redactie (count) | ✅ | — |
+| Latency p50/p95 + warm-up | ✅ | warm-up gedekt in gate-tests |
+| Generalisatie BR-B01..B05 | ❌ nog open | — |
+| Piek-RAM runtime | ❌ nog open | — |
+| Confidence-kalibratie | ❌ nog open | — |
+
 - **Leak-rate** (primaire KPI): zie lek-definitie; **harde gate: 0** voor
-  `DIRECT_IDENTIFIER`. `QUASI_IDENTIFIER`/`CLINICAL_SENSITIVE` worden gerapporteerd,
-  niet geblokkeerd.
-- **Over-redactie-rate**: niet-PII dat onnodig gepseudonimiseerd wordt.
-- **Generalisatie-correctheid** (BR-B01..B05) als aparte check.
-- Per model: **latency** p50/p95 + **piek-RAM** op M1 8 GB (één model tegelijk).
-- **Confidence-kalibratie** waar van toepassing.
+  `DIRECT_IDENTIFIER` op de normal-subset (§12). `QUASI_IDENTIFIER`/
+  `CLINICAL_SENSITIVE` worden gerapporteerd, niet geblokkeerd.
+- **Over-redactie-rate**: niet-PII dat onnodig gepseudonimiseerd wordt (geteld,
+  nog geen drempel-gate).
+- **Generalisatie-correctheid** (BR-B01..B05): `expected_generalization` staat in
+  de dataset; scoring in `evaluate()` volgt nog (§13).
+- Per model: **latency** p50/p95 op M1 8 GB. De eerste runner-aanroep betaalt
+  eenmalige **cold-start**-kosten (lazy spaCy-load, ~1-2 s). `evaluate()` draait
+  standaard eerst één **warm-up-aanroep**; die latency wordt weggegooid maar
+  apart vermeld (`latency.warmup_ms`). `--no-warmup` meet de cold-start wél mee.
+- **Piek-RAM** tijdens inferentie: nog te meten (nu alleen statische `memory_gb`
+  van de host in het rapport).
+- **Confidence-kalibratie** (GLiNER e.d.): nog te implementeren.
 
 ## 7. NER-modellen (top-5, op dezelfde dataset)
 
@@ -130,13 +160,52 @@ expliciet vastgelegd voor de FG.
 | --- | --- | --- | --- |
 | spaCy `nl_core_news_md` (baseline) | CNN | licht, geïntegreerd | generieke labels; geen echte confidence |
 | spaCy `nl_core_news_lg` | CNN | betere dekking, CPU/snel, drop-in | generieke labels |
-| spaCy `nl_core_news_trf` | transformer | hoogste spaCy-accuratesse | zwaar (RAM/CPU); eval-time |
-| GLiNER2-PII (multilingual) | zero-shot transformer | SOTA span-F1 op PII, 42 types incl. NL, configureerbaar, echte confidences, CoreML | lagere precisie OOD (overpredictie namen) |
+| GLiNER2-PII (multilingual) | zero-shot transformer | SOTA span-F1 op PII, 42 types incl. NL, configureerbaar, echte confidences, CoreML; **vult de transformer-rol** | lagere precisie OOD (overpredictie namen); zwaar (RAM) |
 | DEDUCE 3.0 (`vmenger/deduce`) | rule-based NL-medisch | transparant/auditeerbaar, NL-zorgcontext | mist nieuwe patronen; overlapt regex-laag |
+
+**Geen `nl_core_news_trf`.** Explosion publiceert voor Nederlands alleen
+`sm`/`md`/`lg` ([spacy.io/models/nl](https://spacy.io/models/nl)); er is geen
+officieel Dutch transformer-pipeline-pakket. `python -m spacy download
+nl_core_news_trf` faalt daarom altijd. De transformer-benchmark in dit harnas
+loopt via **GLiNER** (runner `pylades_gliner`), niet via een niet-bestaand
+spaCy-trf-model.
 
 Eervolle vermelding: Microsoft Presidio (NL via spaCy + recognizers + context-scoring)
 als integratiepatroon dat het ontbrekende confidence-probleem oplost;
 MedRoBERTa.nl vereist fine-tuning (geen out-of-the-box PII-detector).
+
+**Implementatie (fase 3).** Elke NER-kandidaat is een laag-2-adapter
+([eval/runners/ner_backends.py](eval/runners/ner_backends.py)) achter de
+gemeenschappelijke `NerPipelineRunner`
+([eval/runners/ner_pipeline.py](eval/runners/ner_pipeline.py)): dezelfde
+regex-laag 1 + outbound-maskering, alleen het NER-model verschilt. Voor een
+**eerlijke** vergelijking richten alle modellen zich op de spaCy-doeltypen
+`NAME`/`ORG`/`LOCATION`; gestructureerde PII blijft van de deterministische
+regex-laag, die bij overlap wint. De label-mapping per model (GLiNER-promptlabels,
+DEDUCE-tags) is een expliciete, gedocumenteerde adapter-laag (§4). De zware
+modellen (GLiNER, DEDUCE) zitten in de optionele `eval`-extra en
+worden **lazy** geladen met een installatie-hint bij ontbreken. GLiNER laadt
+met `max_length=768` (i.p.v. het model-default 384) zodat synthetische
+dossiers niet worden afgekapt; langere teksten worden in overlappende chunks
+verwerkt.
+
+Runners (`--runner`): `pylades_md` (baseline), `pylades_lg`, `pylades_gliner`,
+`pylades_deduce`. Eén dataset in één keer door alle modellen +
+een vergelijkend rapport (CSV/HTML met PRF micro/macro, direct-leak-rate en
+latency naast elkaar):
+
+```
+uv sync --extra eval
+uv run python eval.py compare --dataset <set>
+```
+
+`nl_core_news_lg` zit in de eval-extra (naast GLiNER/DEDUCE); apart
+`spacy download` is niet meer nodig. Voer `uv sync` uit vóór `compare` — anders
+worden GLiNER/DEDUCE overgeslagen. Geen `#`-commentaar op dezelfde regel als
+`uv sync` (uv interpreteert dat soms als pakketnaam).
+
+Ontbrekende modellen worden in `compare` overgeslagen (met melding), zodat een
+deelomgeving toch een rapport oplevert.
 
 ## 8. Lokale LLM (laag 3)
 
@@ -145,21 +214,65 @@ Benchmark van laag-3 jargon/product/projectdetectie via Ollama (`detect_llm()` i
 binnen 8 GB. De oracle-rol (volledige NER of upstream-vervanging) is expliciet
 v1.0 en buiten scope.
 
+**Pluggable backend.** Laag 3 heeft een `Layer3Backend`-protocol; de runtime
+gebruikt `OllamaBackend` (default), het harnas kan een alternatieve backend
+injecteren via `detect_all(..., llm_backend=...)`. Zo vergelijken we dezelfde
+pijplijn op verschillende inferentie-backends zonder runtime-gedrag te wijzigen.
+
+**Ollama + MLX (Apple Silicon).** `OllamaMlxEvalBackend`
+([eval/runners/ollama_mlx_backend.py](eval/runners/ollama_mlx_backend.py)) gebruikt
+dezelfde `OllamaBackend`-pijplijn (`format="json"`) maar met een MLX-modeltag
+(default `qwen3.5:2b-nvfp4`). Start Ollama met `OLLAMA_MLX=1`; zo vergelijken we
+MLX-snelheid zonder de JSON-problemen van `mlx_lm.server`.
+
+```
+OLLAMA_MLX=1 ollama serve
+ollama pull qwen3.5:2b-nvfp4
+uv run python eval.py run --dataset <set> --runner pylades_md_ollama_mlx
+```
+
+**mlx_lm.server (Apple Silicon).** `MLXLayer3Backend`
+([eval/runners/mlx_backend.py](eval/runners/mlx_backend.py)) praat met een lokale
+OpenAI-compatibele MLX-server (`mlx_lm.server`). Hiermee draaien we hetzelfde
+qwen3:1.7b op MLX (Apple Metal) i.p.v. Ollama (llama.cpp/GGUF) en meten we
+detectie-kwaliteit (product/project P/R/F1) én latency naast elkaar.
+
+Draaien:
+
+```
+# mlx-lm zit bewust niet in pyproject (alleen Apple Silicon); uv haalt het
+# tijdelijk op met --with, dus niets globaal installeren. Gebruik `uv run`,
+# want kaal `python` bestaat niet op macOS.
+uv run --with mlx-lm python -m mlx_lm.server --model mlx-community/Qwen3-1.7B-4bit --port 8081
+uv run python eval.py run --dataset <set> --runner pylades_md_mlx
+```
+
+Runners: `pylades_md` (regex+spaCy), `pylades_md_llm` (+ laag 3 via Ollama GGUF),
+`pylades_md_ollama_mlx` (+ laag 3 via Ollama MLX, `OLLAMA_MLX_MODEL`),
+`pylades_md_mlx` (+ laag 3 via `mlx_lm.server`). Endpoint/model: `OLLAMA_HOST`/
+`OLLAMA_MLX_MODEL` of `MLX_HOST`/`MLX_MODEL`.
+
 ## 9. Her-uitvoerbaarheid en projectstructuur
 
 ```
 eval/
   datasets/      versie-gepinde JSONL + manifest (checksum, seed, generator-versie)
   generators/    datageneratie + adversarial + offline bootstrap
-  runners/       model-adapters (pylades-pijplijn, later gliner/deduce/...)
+  runners/       model-adapters (regex+spaCy md/lg, GLiNER, DEDUCE; laag-3-backends)
   metrics/       scoring (span/type PRF, leak-rate, kalibratie, latency)
   judge/         oracle/judge (later)
   triage/        failure-clustering + bugrapport-concepten (later)
   reports/       JSON/CSV/HTML, getimestampt + git-SHA
-  cli.py         python -m eval.cli run --dataset ... --report ...
+  compare.py     vergelijkend rapport over meerdere model-adapters
+  cli.py         python -m eval.cli run|compare --dataset ... --report ...
 tests/
   test_eval_scoring.py   unit-tests op de scoring-functies
-  test_eval_gates.py     drempels (leak-rate 0 direct-ids)
+  test_eval_gates.py     drempels (leak-rate 0 direct-ids; zie §12)
+  test_eval_cli.py       CLI smoke
+  test_eval_ner.py       NER-adapters
+  test_eval_report.py    rapportage
+  test_eval_mlx.py       laag-3 MLX-backend (optioneel)
+  test_eval_ollama_mlx.py laag-3 Ollama+MLX (optioneel)
 ```
 
 - Eval-only dependencies als optionele groep `eval` in
@@ -174,27 +287,76 @@ tests/
 - Auditrapport gekoppeld aan **BR-A..BR-G** met testbewijs per regel.
 - Reproduceerbaar **lekkage-bewijs** (dataset-checksum + git-SHA).
 - **Restrisico-register** met v0.3-beperkingen: plaintext
-  `audit_log.original_prompt`, geen medisch NER, `ADDRESS`/`DIAGNOSIS` zonder
-  detector, spaCy zonder per-entity-probabilities.
+  `audit_log.original_prompt`, geen medisch NER, `DIAGNOSIS` zonder detector,
+  beperkte `ADDRESS`-regex (niet alle adresvormen), spaCy zonder
+  per-entity-probabilities.
 - **DPIA-input** als bijlage; volledige DPIA blijft FG-proces.
 
 ## 11. Fasering
 
-| Fase | Inhoud |
-| --- | --- |
-| 0 | Dit document + label-schema + acceptatiedrempels |
-| 1 | Dataset v1 (~150) genereren, valideren, pinnen |
-| 2 | Scoring-engine + baseline-rapport (`md`) + pytest leak-gate |
-| 3 | Adapters voor de 5 NER-kandidaten → vergelijkend rapport |
-| 4 | Laag-3 lokale-LLM-benchmark |
-| 5 | Oracle/judge + triage → bug-backlog; opschalen naar ~600 |
-| 6 | FG-auditrapport + restrisico-register + CI-integratie |
+| Fase | Inhoud | Status (jun 2026) |
+| --- | --- | --- |
+| 0 | Dit document + label-schema + acceptatiedrempels | ✅ af |
+| 1 | Dataset v1 (~150) genereren, valideren, pinnen | ✅ af (`eval/datasets/synthetic/`) |
+| 2 | Scoring-engine + baseline-rapport (`md`) + pytest leak-gate | ✅ af |
+| 3 | Adapters NER (md/lg/GLiNER/DEDUCE) → vergelijkend rapport | ✅ af |
+| 4 | Laag-3 lokale-LLM-benchmark | 🟡 backends + runners; systematische benchmark open |
+| 5 | Oracle/judge + triage → bug-backlog; opschalen naar ~600 | ❌ open |
+| 6 | FG-auditrapport + restrisico-register + CI-integratie | ❌ open |
 
 ## 12. Gekozen defaults
 
-- Datasetomvang: gefaseerd 150 → 600.
-- Privacy-gate: 0 lekken voor `DIRECT_IDENTIFIER`; quasi/clinical rapporteren.
-- Eval-deps: GLiNER, DEDUCE, spaCy-trf (en evt. Presidio) als eval-only groep;
-  runtime ongewijzigd.
-- Verificatie: tweede onafhankelijke LLM-pass + gerichte mens-review.
+- Datasetomvang: gefaseerd 150 → 600 (150 gepind; 600 nog te genereren).
+- **Privacy-gate (formeel):** 0 lekken voor `DIRECT_IDENTIFIER` op de
+  **normal-subset** (`difficulty == "normal"`); adversarial alleen rapporteren
+  in vergelijkingsrapporten.
+- **Privacy-gate (pytest, uitbreiding):** naast de formele gate draait
+  [tests/test_eval_gates.py](tests/test_eval_gates.py) strengere regressie:
+  - bootstrap normal-subset via `PyladesPipelineRunner()` (spaCy md);
+  - gepinde normal-records `syn_029`, `syn_060` op `pylades_deduce`;
+  - gepinde adversarial-records `syn_112`, `syn_120`, `syn_121`, `syn_122`,
+    `syn_140` op `pylades_deduce` **zonder GLiNER** (`name_fallback=False`);
+  - volledige synthetische set (150 dossiers) 0 direct-lek op diezelfde
+    deduce-pijplijn. Dit is een **productie-gerichte regressie**, geen vervanging
+    van de formele gate op alleen-normal.
+- Quasi/clinical: rapporteren, niet blokkeren.
+- Eval-deps: GLiNER, DEDUCE als eval-only groep; runtime ongewijzigd.
+  GLiNER blijft optioneel (`name_fallback=True`) voor vergelijking, niet default.
+- Verificatie: tweede onafhankelijke LLM-pass + gerichte mens-review (nog open).
 - Span-matching: beide (exact + overlap).
+
+## 13. Implementatiestatus
+
+Laatste update: juni 2026. Dit hoofdstuk volgt de voortgang t.o.v. §1–§12.
+
+### Afgerond
+
+- CLI: `eval.py` (`bootstrap`, `generate`, `validate`, `run`, `compare`, `runners`).
+- Gepinde datasets: bootstrap (10), synthetic (150), manifest + sha256.
+- Scoring, rapporten (JSON/CSV/HTML), vergelijkend rapport, warm-up-latency.
+- NER-runners: `pylades_md`, `pylades_lg`, `pylades_gliner`, `pylades_deduce`.
+- DEDUCE-pijplijn: rol-context-heuristiek ([proxy/role_names.py](proxy/role_names.py)),
+  NAME-span-uitbreiding ([proxy/name_spans.py](proxy/name_spans.py)), optionele
+  GLiNER-fallback uit in default.
+- Laag-3 eval-backends: Ollama GGUF, Ollama+MLX, `mlx_lm.server`.
+- Pytest: scoring, gates, CLI, rapport, NER (plus optionele laag-3-tests).
+
+### Nog open (prioriteit)
+
+1. **Generalisatie-score** — `expected_generalization` verifiëren in `evaluate()`.
+2. **Dataset ~600** — genereren, valideren, pinnen; opnieuw triageren.
+3. **`eval/judge/`** — oracle/judge op steekproef (§3).
+4. **`eval/triage/`** — failure-clustering → bugrapporten (§3).
+5. **Verificatie-pijplijn** — tweede LLM-pass + mens-review (§5 stap 4).
+6. **Laag-3 benchmark** — systematische vergelijking modellen binnen 8 GB (fase 4).
+7. **Metrics** — piek-RAM runtime, confidence-kalibratie (§6).
+8. **FG/DPO** — auditrapport BR-A..BR-G, restrisico-register, DPIA-input (§10).
+9. **CI** — `.github/workflows/` met gate + rapport (§9).
+
+### Detectie-verbeteringen buiten het harnas (productie)
+
+Deze vallen onder de detectie-pijplijn (§2) en verbeteren deduce-leak-KPI's;
+ze staan niet als aparte TESTPLAN-fase:
+
+- ADDRESS-regex (NL straat + huisnummer) in regex-laag 1.
+- Rol-context NAME-heuristiek en span-coalescence in de deduce-eval-adapter.
