@@ -43,7 +43,7 @@ from shared.config import settings
 _DEFAULT_DATASET = "eval/datasets/bootstrap/dataset.jsonl"
 _DEFAULT_DATASETS_DIR = "eval/datasets"
 _DEFAULT_REPORT_DIR = "eval/reports"
-_DEFAULT_RUNNER = "pylades_md"
+_DEFAULT_RUNNER = "pylades_deduce_runtime"
 
 # Voorkom HuggingFace-tokenizer-waarschuwingen na fork (bv. webbrowser.open_new).
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -52,9 +52,9 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 def _runner_catalog() -> dict[str, tuple[str, Callable[[], Runner]]]:
     """Naam → (beschrijving, factory). Enige bron voor CLI en `--runner`."""
     return {
-        "pylades_md": (
-            "regex + spaCy (laag 3 uit)",
-            lambda: PyladesPipelineRunner(name="pylades_md", use_llm=False),
+        "pylades_deduce_runtime": (
+            "regex + DEDUCE runtime-pijplijn (laag 3 uit)",
+            lambda: PyladesPipelineRunner(name="pylades_deduce_runtime", use_llm=False),
         ),
         "pylades_md_llm": (
             f"laag 3 via Ollama GGUF ({settings.ollama_model})",
@@ -292,7 +292,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
-_DEFAULT_COMPARE_RUNNERS = "pylades_md,pylades_lg,pylades_gliner,pylades_deduce"
+_DEFAULT_COMPARE_RUNNERS = "pylades_deduce_runtime,pylades_lg,pylades_gliner,pylades_deduce"
 
 
 def _cmd_compare(args: argparse.Namespace) -> int:

@@ -26,7 +26,7 @@ class PyladesPipelineRunner:
     def __init__(
         self,
         *,
-        name: str = "pylades_md",
+        name: str = "pylades_deduce_runtime",
         use_llm: bool = False,
         thresholds: Thresholds | None = None,
         llm_backend: Layer3Backend | None = None,

@@ -80,7 +80,7 @@ def test_resolve_manifest_none_when_no_match(tmp_path: Path) -> None:
 
 def test_runners_lists_all_adapters() -> None:
     text = _format_runners_list()
-    for name in ("pylades_md", "pylades_md_llm", "pylades_md_ollama_mlx", "pylades_md_mlx"):
+    for name in ("pylades_deduce_runtime", "pylades_md_llm", "pylades_md_ollama_mlx", "pylades_md_mlx"):
         assert name in text
     assert "(default)" in text
 

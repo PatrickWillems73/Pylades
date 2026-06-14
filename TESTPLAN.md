@@ -43,7 +43,7 @@ en een aparte security-suite.
 flowchart TD
   gen["Datageneratie + adversarial (offline, gepind)"] --> dataset["Dataset JSONL + manifest"]
   human["Verificatie: tweede LLM-pass + gerichte mens-review"] --> dataset
-  dataset --> runner["Model-adapters: pylades_md, lg, gliner, deduce"]
+  dataset --> runner["Model-adapters: pylades_deduce_runtime, lg, gliner, deduce"]
   runner --> pipeline["detect_all -> generalize_all -> pseudonymize (dry-run)"]
   pipeline --> metrics["Scoring: span/type PRF, leak-rate, generalisatie, latency"]
   metrics --> report["Rapport JSON/CSV/HTML + git-SHA"]
@@ -190,7 +190,7 @@ met `max_length=768` (i.p.v. het model-default 384) zodat synthetische
 dossiers niet worden afgekapt; langere teksten worden in overlappende chunks
 verwerkt.
 
-Runners (`--runner`): `pylades_md` (baseline), `pylades_lg`, `pylades_gliner`,
+Runners (`--runner`): `pylades_deduce_runtime` (baseline), `pylades_lg`, `pylades_gliner`,
 `pylades_deduce`. Eén dataset in één keer door alle modellen +
 een vergelijkend rapport (CSV/HTML met PRF micro/macro, direct-leak-rate en
 latency naast elkaar):
@@ -248,7 +248,7 @@ uv run --with mlx-lm python -m mlx_lm.server --model mlx-community/Qwen3-1.7B-4b
 uv run python eval.py run --dataset <set> --runner pylades_md_mlx
 ```
 
-Runners: `pylades_md` (regex+spaCy), `pylades_md_llm` (+ laag 3 via Ollama GGUF),
+Runners: `pylades_deduce_runtime` (regex+DEDUCE), `pylades_md_llm` (+ laag 3 via Ollama GGUF),
 `pylades_md_ollama_mlx` (+ laag 3 via Ollama MLX, `OLLAMA_MLX_MODEL`),
 `pylades_md_mlx` (+ laag 3 via `mlx_lm.server`). Endpoint/model: `OLLAMA_HOST`/
 `OLLAMA_MLX_MODEL` of `MLX_HOST`/`MLX_MODEL`.
@@ -313,7 +313,7 @@ tests/
   in vergelijkingsrapporten.
 - **Privacy-gate (pytest, uitbreiding):** naast de formele gate draait
   [tests/test_eval_gates.py](tests/test_eval_gates.py) strengere regressie:
-  - bootstrap normal-subset via `PyladesPipelineRunner()` (spaCy md);
+  - bootstrap normal-subset via `PyladesPipelineRunner()` (DEDUCE runtime);
   - gepinde normal-records `syn_029`, `syn_060` op `pylades_deduce`;
   - gepinde adversarial-records `syn_112`, `syn_120`, `syn_121`, `syn_122`,
     `syn_140` op `pylades_deduce` **zonder GLiNER** (`name_fallback=False`);
@@ -335,7 +335,7 @@ Laatste update: juni 2026. Dit hoofdstuk volgt de voortgang t.o.v. §1–§12.
 - CLI: `eval.py` (`bootstrap`, `generate`, `validate`, `run`, `compare`, `runners`).
 - Gepinde datasets: bootstrap (10), synthetic (150), manifest + sha256.
 - Scoring, rapporten (JSON/CSV/HTML), vergelijkend rapport, warm-up-latency.
-- NER-runners: `pylades_md`, `pylades_lg`, `pylades_gliner`, `pylades_deduce`.
+- NER-runners: `pylades_deduce_runtime`, `pylades_lg`, `pylades_gliner`, `pylades_deduce`.
 - DEDUCE-pijplijn: rol-context-heuristiek ([proxy/role_names.py](proxy/role_names.py)),
   NAME-span-uitbreiding ([proxy/name_spans.py](proxy/name_spans.py)), optionele
   GLiNER-fallback uit in default.

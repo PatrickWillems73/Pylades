@@ -287,35 +287,38 @@ def _mini_report(runner: str, layer2: str, micro: float, leak: int) -> dict:
 
 
 def test_dig_reads_nested_and_missing() -> None:
-    report = _mini_report("pylades_md", "spacy (md)", 0.9, 1)
+    report = _mini_report("pylades_deduce_runtime", "deduce (NL-medisch)", 0.9, 1)
     assert _dig(report, ("scores", "overlap", "macro_f1")) == 0.9
     assert _dig(report, ("nope", "nope")) == ""
 
 
 def test_write_comparison_outputs_csv_and_html(tmp_path) -> None:
     reports = [
-        _mini_report("pylades_md", "spacy (nl_core_news_md)", 0.80, 2),
+        _mini_report("pylades_deduce_runtime", "deduce (NL-medisch + rol-NAME-heuristiek)", 0.80, 2),
         _mini_report("pylades_gliner", "gliner (pii)", 0.88, 0),
     ]
-    md_html = tmp_path / "pylades_md-20260101-120000.html"
+    runtime_html = tmp_path / "pylades_deduce_runtime-20260101-120000.html"
     gliner_html = tmp_path / "pylades_gliner-20260101-120100.html"
-    md_html.write_text("<html></html>", encoding="utf-8")
+    runtime_html.write_text("<html></html>", encoding="utf-8")
     gliner_html.write_text("<html></html>", encoding="utf-8")
     paths = write_comparison(
         reports,
         tmp_path,
-        runner_html={"pylades_md": md_html, "pylades_gliner": gliner_html},
+        runner_html={
+            "pylades_deduce_runtime": runtime_html,
+            "pylades_gliner": gliner_html,
+        },
     )
 
     csv_text = paths["csv"].read_text(encoding="utf-8")
-    assert "pylades_md" in csv_text and "pylades_gliner" in csv_text
+    assert "pylades_deduce_runtime" in csv_text and "pylades_gliner" in csv_text
     assert csv_text.strip().count("\n") == 2  # header + 2 rijen
 
     html = paths["html"].read_text(encoding="utf-8")
     assert "NER-vergelijking" in html
-    assert "spacy (nl_core_news_md)" in html
+    assert "deduce (NL-medisch + rol-NAME-heuristiek)" in html
     assert "gliner (pii)" in html
-    assert f'<a href="{md_html.name}">pylades_md</a>' in html
+    assert f'<a href="{runtime_html.name}">pylades_deduce_runtime</a>' in html
     assert f'<a href="{gliner_html.name}">pylades_gliner</a>' in html
     assert "Span-matching" in html
     assert "F1 (exact)" in html and "F1 (overlap)" in html
