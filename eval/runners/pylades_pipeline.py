@@ -21,7 +21,7 @@ from shared.models import DetectionLayer, Entity
 
 
 class PyladesPipelineRunner:
-    """Draait regex + spaCy (+ optioneel laag-3) zoals de proxy dat doet."""
+    """Draait regex + DEDUCE (+ optioneel laag-3) zoals de proxy dat doet."""
 
     def __init__(
         self,
@@ -32,10 +32,10 @@ class PyladesPipelineRunner:
         llm_backend: Layer3Backend | None = None,
     ) -> None:
         self.name = name
-        # Publiek zodat het rapport per type het concrete model kan benoemen
-        # (bv. "spacy md") en expliciet kan melden of laag 3 gedraaid is.
+        # Publiek zodat het rapport laag 2/3 kan benoemen in describe_layers().
         self.use_llm = use_llm
-        self.spacy_model = settings.spacy_model
+        self.layer2_desc = "deduce (NL-medisch + rol-NAME-heuristiek)"
+        self.spacy_model = None
         self._llm_backend = llm_backend
         # Toon het model van de geïnjecteerde backend indien aanwezig (bv. MLX),
         # anders het Ollama-default dat detect_all gebruikt.

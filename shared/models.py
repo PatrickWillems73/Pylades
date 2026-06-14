@@ -58,7 +58,8 @@ class DetectionLayer(StrEnum):
     """Welke detectielaag heeft de entity gevonden."""
 
     REGEX = "regex"
-    SPACY = "spacy"
+    SPACY = "spacy"  # historisch / eval-benchmark; runtime schrijft DEDUCE
+    DEDUCE = "deduce"
     LLM = "llm"
 
 

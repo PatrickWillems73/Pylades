@@ -5,7 +5,7 @@ Het rapport is een platte dict (JSON-vriendelijk) met per matching-modus
 de lek-analyse (primaire privacy-KPI), over-redactie en latency-percentielen.
 
 **Warm-up.** De eerste runner-aanroep betaalt eenmalige cold-start-kosten
-(o.a. het lazy laden van het spaCy-model, ~1-2 s) die niets met de
+(o.a. het lazy laden van DEDUCE, ~1-2 s) die niets met de
 detectie-snelheid per dossier te maken hebben. Zonder correctie vertekent die
 ene uitschieter p95 en mean, wat modellen oneerlijk vergelijkt. Daarom draait
 `evaluate()` standaard eerst één **warm-up-aanroep** op een vaste dummy-prompt
@@ -51,7 +51,7 @@ _EXPOSURE_CATEGORIES = (
 
 _MODES = ("exact", "overlap")
 
-# Vaste dummy-prompt voor de warm-up. Bevat een naam (laag 2/spaCy-NER), een
+# Vaste dummy-prompt voor de warm-up. Bevat een naam (laag 2/DEDUCE), een
 # datum en een BSN-achtig nummer (laag 1/regex) zodat dezelfde codepaden warm
 # draaien als bij echte dossiers. De inhoud is fictief en doet niet mee in de
 # metrics — alleen de modelcaches worden geïnitialiseerd.
@@ -105,12 +105,11 @@ def collect_environment() -> dict[str, Any]:
 
 def describe_layers(run_meta: dict[str, Any]) -> dict[str, str]:
     """Beschrijf per detectielaag welk model/techniek deze run gebruikte."""
-    # Laag 2 kan een andere NER-backend zijn dan spaCy-md (fase 3: lg/trf/
-    # gliner/deduce); de runner levert dan een expliciete `layer2`-beschrijving.
+    # Laag 2 kan een andere NER-backend zijn dan runtime-DEDUCE (fase 3: spaCy
+    # lg, GLiNER, …); de runner levert dan een expliciete `layer2`-beschrijving.
     layer2 = run_meta.get("layer2")
     if not layer2:
-        spacy_model = run_meta.get("spacy_model") or "onbekend"
-        layer2 = f"spacy ({spacy_model})"
+        layer2 = "deduce (NL-medisch + rol-NAME-heuristiek)"
     if not run_meta.get("use_llm"):
         layer3 = "niet gedraaid (laag 3 uit)"
     else:

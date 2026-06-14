@@ -1,15 +1,9 @@
-"""Drielagige entity-detectie: regex -> spaCy -> Ollama (laag 3 default uit).
+"""Drielagige entity-detectie: regex -> DEDUCE -> Ollama (laag 3 default uit).
 
 Volgorde is bewust van hoge naar lage precisie: regex (deterministisch,
-hoge specificiteit, validators voor BSN/IBAN), dan spaCy NER (breder maar
-zachter), dan optioneel Ollama (jargon/productnamen). Latere lagen mogen
-*toevoegen* aan eerdere lagen, nooit *overschrijven* — geclaimde spans
-blijven van wie ze eerst pakte.
-
-Configureerbare thresholds per laag (en per spaCy-label) routeren entities
-naar `confident_entities` of `pending_review` (BR-A04). Een operator kan
-de threshold tijdelijk hoger zetten om bepaalde detecties geforceerd door
-de manual-review-queue te laten lopen.
+hoge specificiteit, validators voor BSN/IBAN), dan DEDUCE NER (+ rol-heuristiek
+en NAME-span-uitbreiding), dan optioneel Ollama (jargon/productnamen). Latere
+lagen mogen *toevoegen* aan eerdere lagen, nooit *overschrijven*.
 """
 
 from __future__ import annotations
@@ -23,8 +17,7 @@ from functools import lru_cache
 from time import perf_counter
 from typing import Any, Final, Protocol
 
-from proxy.name_spans import expand_name_span
-from proxy.role_names import detect_role_context_name_spans
+from proxy.deduce_layer import detect_deduce_entities
 from shared.config import settings
 from shared.crypto import validate_bsn_elfproef, validate_iban_checksum
 from shared.db import get_config_value
@@ -172,7 +165,7 @@ REGEX_PATTERNS: Final[list[tuple[EntityType, re.Pattern[str], Callable[[str], bo
 
 
 # ---------------------------------------------------------------------------
-# spaCy NER (BR-A02 brede dekking voor NAME/ORG/LOCATION)
+# spaCy label-mapping — eval-benchmark (SpacyNerBackend) only
 # ---------------------------------------------------------------------------
 
 # spaCy's `nl_core_news_md` heeft historisch twee NER-label-schema's:
@@ -208,19 +201,6 @@ _SPACY_LABEL_CONFIDENCE: Final[dict[str, float]] = {
 }
 
 
-@lru_cache(maxsize=1)
-def _get_spacy_nlp() -> Any:
-    """Lazy laad het NL-model; gecached voor de proces-lifetime.
-
-    Bewust lazy: tests die alleen regex valideren betalen de ~5s model-load
-    niet, en bij `ollama serve`-flows hoeft het spaCy-model niet in geheugen
-    te zitten als de gebruiker laag 2 uitschakelt.
-    """
-    import spacy  # noqa: PLC0415
-
-    return spacy.load(settings.spacy_model)
-
-
 # ---------------------------------------------------------------------------
 # Thresholds
 # ---------------------------------------------------------------------------
@@ -252,18 +232,17 @@ class Thresholds:
         )
 
     def for_entity(self, entity: Entity) -> float:
-        # Layer + entity_type bepalen welke knob telt. Voor REGEX en LLM is
-        # er één globale waarde per laag; voor SPACY hangt het af van het
-        # label dat de NER opleverde.
         if entity.detection_layer is DetectionLayer.REGEX:
             return self.regex
         if entity.detection_layer is DetectionLayer.LLM:
             return self.llm
-        return {
-            EntityType.NAME: self.spacy_person,
-            EntityType.ORG: self.spacy_org,
-            EntityType.LOCATION: self.spacy_location,
-        }.get(entity.entity_type, 1.0)
+        if entity.detection_layer in (DetectionLayer.SPACY, DetectionLayer.DEDUCE):
+            return {
+                EntityType.NAME: self.spacy_person,
+                EntityType.ORG: self.spacy_org,
+                EntityType.LOCATION: self.spacy_location,
+            }.get(entity.entity_type, 1.0)
+        return 1.0
 
 
 def _read_float(key: str, default: float) -> float:
@@ -342,63 +321,21 @@ def detect_regex(text: str) -> list[Entity]:
     return entities
 
 
-def detect_spacy_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
-    """Laag 2 met expliciete beschikbaarheidsstatus voor de voortgangsindicator.
-
-    Soft-fail bij ontbrekend model — laag 1 heeft al gedraaid, dus de
-    pijplijn werkt door zonder spaCy. De status onderscheidt "gedraaid"
-    (`OK`) van "model niet geïnstalleerd" (`UNAVAILABLE`) zodat de UI het
-    verschil kan tonen.
-    """
+def detect_deduce_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
+    """Laag 2: DEDUCE + rol-heuristiek + NAME-span-uitbreiding."""
     try:
-        nlp = _get_spacy_nlp()
-    except OSError as exc:
-        logger.warning("Laag 2 (spaCy %r) niet beschikbaar: %s", settings.spacy_model, exc)
+        entities = detect_deduce_entities(text)
+    except ImportError as exc:
+        logger.warning("Laag 2 (DEDUCE) niet beschikbaar: %s", exc)
         return [], LayerStatus.UNAVAILABLE
-
-    doc = nlp(text)
-    entities: list[Entity] = []
-    for ent in doc.ents:
-        entity_type = _SPACY_LABEL_TO_TYPE.get(ent.label_)
-        if entity_type is None:
-            continue
-        start, end = ent.start_char, ent.end_char
-        if entity_type is EntityType.NAME:
-            start, end = expand_name_span(text, start, end)
-        entities.append(
-            Entity(
-                original=text[start:end],
-                entity_type=entity_type,
-                confidence=_SPACY_LABEL_CONFIDENCE.get(ent.label_, 0.85),
-                detection_layer=DetectionLayer.SPACY,
-                start=start,
-                end=end,
-            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Laag 2 (DEDUCE) initialiseren/draaien mislukte: %s: %s",
+            type(exc).__name__,
+            exc,
         )
+        return [], LayerStatus.UNAVAILABLE
     return entities, LayerStatus.OK
-
-
-def detect_spacy(text: str) -> list[Entity]:
-    """Laag 2: spaCy NER voor NAME/ORG/LOCATION (zie `detect_spacy_with_status`)."""
-    return detect_spacy_with_status(text)[0]
-
-
-_ROLE_CONTEXT_CONFIDENCE: Final[float] = 0.85
-
-
-def detect_role_context(text: str) -> list[Entity]:
-    """Laag 2b: context-NAME-heuristiek (zorgrollen/relaties) na spaCy."""
-    return [
-        Entity(
-            original=surface,
-            entity_type=EntityType.NAME,
-            confidence=_ROLE_CONTEXT_CONFIDENCE,
-            detection_layer=DetectionLayer.SPACY,
-            start=start,
-            end=end,
-        )
-        for start, end, surface in detect_role_context_name_spans(text)
-    ]
 
 
 _LLM_SYSTEM_PROMPT: Final[str] = (
@@ -517,23 +454,21 @@ _LLM_TYPE_MAP: Final[dict[str, EntityType]] = {
 def detector_layers_by_type() -> dict[EntityType, tuple[DetectionLayer, ...]]:
     """Welke detectielaag/lagen elk `EntityType` in principe kan detecteren.
 
-    Afgeleid van de daadwerkelijke detector-structuren (regex-patronen, spaCy-
-    en LLM-mappings) zodat deze map automatisch in sync blijft met de
-    implementatie. Types zonder enige detector — `ADDRESS`, `DIAGNOSIS` en
-    generalisatie-output (`BIRTH_YEAR`, `POSTCODE_PC2`) — ontbreken bewust in
-    het resultaat (geen detector). De laag-volgorde is regex → spaCy → LLM.
+    Afgeleid van de daadwerkelijke detector-structuren (regex, DEDUCE, LLM).
+    Types zonder detector — `ADDRESS`, `DIAGNOSIS`, generalisatie-output —
+    ontbreken bewust. De laag-volgorde is regex → DEDUCE → LLM.
     """
     layers: dict[EntityType, set[DetectionLayer]] = {}
     for etype, _pattern in CONTEXT_DATE_PATTERNS:
         layers.setdefault(etype, set()).add(DetectionLayer.REGEX)
     for etype, _pattern, _validator in REGEX_PATTERNS:
         layers.setdefault(etype, set()).add(DetectionLayer.REGEX)
-    for etype in _SPACY_LABEL_TO_TYPE.values():
-        layers.setdefault(etype, set()).add(DetectionLayer.SPACY)
+    for etype in (EntityType.NAME, EntityType.ORG, EntityType.LOCATION):
+        layers.setdefault(etype, set()).add(DetectionLayer.DEDUCE)
     for etype in _LLM_TYPE_MAP.values():
         layers.setdefault(etype, set()).add(DetectionLayer.LLM)
 
-    order = (DetectionLayer.REGEX, DetectionLayer.SPACY, DetectionLayer.LLM)
+    order = (DetectionLayer.REGEX, DetectionLayer.DEDUCE, DetectionLayer.LLM)
     return {
         etype: tuple(layer for layer in order if layer in found)
         for etype, found in layers.items()
@@ -616,14 +551,14 @@ def detect_all_timed(
 ) -> tuple[DetectionResult, list[LayerTiming]]:
     """Als `detect_all`, maar meet elke laag en levert per-laag-timing.
 
-    - `use_llm=False` (default): alleen regex + spaCy; laag 3 krijgt status
+    - `use_llm=False` (default): alleen regex + DEDUCE; laag 3 krijgt status
       `DISABLED`.
     - `on_layer`: optionele callback die na elke laag-overgang wordt
       aangeroepen met de timings-tot-nu-toe (incl. een `RUNNING`-entry voor
       de laag die nu draait). Hiermee kan de UI live updaten.
 
     Latere lagen die met eerdere overlappen worden gedropt — dit is de
-    "earlier-layer-wins"-regel die ervoor zorgt dat een spaCy-NAME niet
+    "earlier-layer-wins"-regel die ervoor zorgt dat een laag-2-NAME niet
     een al gedetecteerde BSN kan opslokken.
     """
     effective_thresholds = thresholds if thresholds is not None else Thresholds.from_db()
@@ -647,16 +582,16 @@ def detect_all_timed(
     )
     _emit()
 
-    # Laag 2 — spaCy NER.
-    _emit(LayerTiming(DetectionLayer.SPACY, LayerStatus.RUNNING, None, 0))
+    # Laag 2 — DEDUCE (+ rol-heuristiek).
+    _emit(LayerTiming(DetectionLayer.DEDUCE, LayerStatus.RUNNING, None, 0))
     start = perf_counter()
-    spacy_entities, spacy_status = detect_spacy_with_status(text)
+    deduce_entities, deduce_status = detect_deduce_with_status(text)
     timings.append(
         LayerTiming(
-            DetectionLayer.SPACY,
-            spacy_status,
+            DetectionLayer.DEDUCE,
+            deduce_status,
             (perf_counter() - start) * 1000.0,
-            len(spacy_entities),
+            len(deduce_entities),
         )
     )
     _emit()
@@ -679,38 +614,8 @@ def detect_all_timed(
         timings.append(LayerTiming(DetectionLayer.LLM, LayerStatus.DISABLED, None, 0))
     _emit()
 
-    merged = _merge_cross_layer((regex_entities, spacy_entities, llm_entities))
-    role_entities = detect_role_context(text)
-    merged = _merge_name_supplements(merged, role_entities)
+    merged = _merge_cross_layer((regex_entities, deduce_entities, llm_entities))
     return _route_by_threshold(merged, effective_thresholds), timings
-
-
-def _merge_name_supplements(merged: list[Entity], additions: list[Entity]) -> list[Entity]:
-    """Voeg NAME-spans toe; bij overlap wint de langste span."""
-    result = list(merged)
-    for add in additions:
-        if add.entity_type is not EntityType.NAME:
-            continue
-        add_box = (add.start, add.end)
-        overlap_idxs = [
-            idx
-            for idx, existing in enumerate(result)
-            if existing.entity_type is EntityType.NAME
-            and _overlap(add_box, (existing.start, existing.end))
-        ]
-        if not overlap_idxs:
-            result.append(add)
-            continue
-        best_existing = max(
-            (result[idx] for idx in overlap_idxs),
-            key=lambda ent: (ent.end - ent.start, ent.end),
-        )
-        if (add.end - add.start) <= (best_existing.end - best_existing.start):
-            continue
-        for idx in sorted(overlap_idxs, reverse=True):
-            del result[idx]
-        result.append(add)
-    return result
 
 
 def _merge_cross_layer(

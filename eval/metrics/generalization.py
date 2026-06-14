@@ -14,11 +14,12 @@ def _preds_to_entities(preds: list[PredEntity]) -> list[Entity]:
     layer_map = {
         DetectionLayer.REGEX.value: DetectionLayer.REGEX,
         DetectionLayer.SPACY.value: DetectionLayer.SPACY,
+        DetectionLayer.DEDUCE.value: DetectionLayer.DEDUCE,
         DetectionLayer.LLM.value: DetectionLayer.LLM,
     }
     entities: list[Entity] = []
     for pred in preds:
-        layer = layer_map.get(pred.layer, DetectionLayer.SPACY)
+        layer = layer_map.get(pred.layer, DetectionLayer.DEDUCE)
         entities.append(
             Entity(
                 original=pred.text,

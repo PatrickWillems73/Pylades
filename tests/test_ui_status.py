@@ -10,9 +10,9 @@ from shared.config import settings
 from shared.db import init_databases
 from ui.status import (
     check_databases,
+    check_deduce,
     check_ollama,
     check_proxy,
-    check_spacy,
     run_all_checks,
 )
 
@@ -55,13 +55,11 @@ def test_check_ollama_returns_red_when_no_server(
     assert "ollama" in (result.fix_command or "").lower()
 
 
-def test_check_spacy_red_for_unknown_model(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "spacy_model", "definitely_not_a_model_xyz")
-    result = check_spacy()
+def test_check_deduce_red_when_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("proxy.deduce_layer.deduce_available", lambda: False)
+    result = check_deduce()
     assert result.ok is False
-    assert "spacy download" in (result.fix_command or "")
+    assert "uv sync" in (result.fix_command or "")
 
 
 def test_run_all_checks_returns_four_cards(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,11 +68,11 @@ def test_run_all_checks_returns_four_cards(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(settings, "global_secret_path", tmp_path / "sec.bin")
     monkeypatch.setattr(settings, "proxy_port", 1)
     monkeypatch.setattr(settings, "ollama_host", "http://127.0.0.1:1")
-    monkeypatch.setattr(settings, "spacy_model", "definitely_not_a_model_xyz")
+    monkeypatch.setattr("proxy.deduce_layer.deduce_available", lambda: False)
     init_databases()
 
     cards = run_all_checks()
-    assert [c.name for c in cards] == ["Proxy", "Ollama", "spaCy", "Databases"]
+    assert [c.name for c in cards] == ["Proxy", "Ollama", "DEDUCE", "Databases"]
     # Drie rood, één groen (databases).
     assert sum(1 for c in cards if c.ok) == 1
     assert any(c.name == "Databases" and c.ok for c in cards)

@@ -21,10 +21,10 @@ from eval.runners.ner_backends import (
     NerBackendError,
     NerSpan,
     SpacyNerBackend,
-    _deduce_base_tag,
     _gliner_windows,
     _merge_ner_spans,
 )
+from proxy.deduce_layer import _deduce_base_tag
 from eval.runners.ner_pipeline import NerPipelineRunner
 from eval.schema import EvalRecord, GoldEntity
 from shared.models import EntityType
@@ -111,9 +111,9 @@ def test_report_describes_layer2_from_runner() -> None:
     assert report["layers_config"]["layer3"] == "niet gedraaid (laag 3 uit)"
 
 
-def test_describe_layers_falls_back_to_spacy_model() -> None:
-    layers = describe_layers({"spacy_model": "nl_core_news_md", "use_llm": False})
-    assert layers["layer2"] == "spacy (nl_core_news_md)"
+def test_describe_layers_falls_back_to_deduce() -> None:
+    layers = describe_layers({"use_llm": False})
+    assert layers["layer2"] == "deduce (NL-medisch + rol-NAME-heuristiek)"
 
 
 def test_spacy_backend_unavailable_raises_with_hint() -> None:
@@ -243,16 +243,21 @@ def test_deduce_base_tag() -> None:
     assert _deduce_base_tag("LOCATIE") == "locatie"
 
 
-def test_deduce_backend_maps_and_filters_tags() -> None:
-    backend = DeduceBackend(name_fallback=False)
-    backend._deduce = _FakeDeduce(
-        [
-            _Ann(0, 3, "Jan", "patient"),
-            _Ann(5, 8, "OLV", "instelling"),
-            _Ann(9, 19, "01-01-1980", "datum"),
-        ]
+def test_deduce_backend_maps_and_filters_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    from proxy import deduce_layer
+
+    monkeypatch.setattr(
+        deduce_layer,
+        "_get_deduce",
+        lambda: _FakeDeduce(
+            [
+                _Ann(0, 3, "Jan", "patient"),
+                _Ann(5, 8, "OLV", "instelling"),
+                _Ann(9, 19, "01-01-1980", "datum"),
+            ]
+        ),
     )
-    spans = backend.detect("ignored")
+    spans = DeduceBackend(name_fallback=False).detect("ignored")
     assert [s.type for s in spans] == [EntityType.NAME, EntityType.ORG]
     assert all(s.score == 1.0 for s in spans)
 

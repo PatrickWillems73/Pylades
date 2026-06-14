@@ -12,11 +12,12 @@ from shared.models import DetectionLayer, EntityType
 
 
 class _StubRunner:
-    """Minimale runner: één voorspelling, geen spaCy-load nodig (snel)."""
+    """Minimale runner: één voorspelling, geen DEDUCE-load nodig (snel)."""
 
     name = "stub"
     use_llm = False
-    spacy_model = "nl_core_news_md"
+    layer2_desc = "deduce (NL-medisch + rol-NAME-heuristiek)"
+    spacy_model = None
     llm_model = "qwen3:1.7b"
 
     def run(self, prompt: str) -> RunOutput:  # noqa: ARG002
@@ -28,7 +29,7 @@ class _StubRunner:
                     start=0,
                     end=3,
                     confidence=0.99,
-                    layer=DetectionLayer.SPACY.value,
+                    layer=DetectionLayer.DEDUCE.value,
                 )
             ],
             outbound_text="",
@@ -53,7 +54,7 @@ def test_report_has_context_and_prediction_blocks() -> None:
     assert "environment" in report
     assert "summary" in report["environment"]
     assert report["layers_config"]["layer1"] == "regex"
-    assert report["layers_config"]["layer2"] == "spacy (nl_core_news_md)"
+    assert report["layers_config"]["layer2"] == "deduce (NL-medisch + rol-NAME-heuristiek)"
     assert report["predicted_by_type"].get("name") == 1
 
 

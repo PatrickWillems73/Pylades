@@ -7,6 +7,7 @@ Drie groepen:
 
 spaCy- en Ollama-tests skippen wanneer hun model/server niet beschikbaar
 is, zodat de suite in een minimal-CI-omgeving toch groen kan zijn.
+DEDUCE is een hoofddependency; de laag-2-tests skippen als import/init faalt.
 """
 
 from __future__ import annotations
@@ -26,15 +27,15 @@ from proxy.detection import (
     LayerStatus,
     LayerTiming,
     Thresholds,
-    _get_spacy_nlp,
     _llm_entities_from_payload,
     _merge_cross_layer,
     detect_all,
     detect_all_timed,
+    detect_deduce_with_status,
     detect_llm,
     detect_regex,
-    detect_spacy,
 )
+from proxy.deduce_layer import deduce_available
 from shared.config import settings
 from shared.models import DetectionLayer, Entity, EntityType
 
@@ -43,23 +44,13 @@ def _types_in(entities: list[Entity]) -> set[EntityType]:
     return {entity.entity_type for entity in entities}
 
 
-def _spacy_available() -> bool:
-    try:
-        _get_spacy_nlp.cache_clear()
-        _get_spacy_nlp()
-        return True
-    except OSError:
-        return False
-    except ImportError:
-        return False
+def _deduce_available() -> bool:
+    return deduce_available()
 
 
-skip_no_spacy = pytest.mark.skipif(
-    not _spacy_available(),
-    reason=(
-        f"spaCy-model {settings.spacy_model!r} niet geïnstalleerd — "
-        "draai 'uv run python -m spacy download nl_core_news_md'"
-    ),
+skip_no_deduce = pytest.mark.skipif(
+    not _deduce_available(),
+    reason="DEDUCE niet beschikbaar — draai 'uv sync'",
 )
 
 
@@ -78,7 +69,7 @@ class TestDetectAllTimed:
         layers = [t.layer for t in timings]
         assert layers == [
             DetectionLayer.REGEX,
-            DetectionLayer.SPACY,
+            DetectionLayer.DEDUCE,
             DetectionLayer.LLM,
         ]
         regex_timing = timings[0]
@@ -105,11 +96,11 @@ class TestDetectAllTimed:
         # Eerste callback markeert regex als RUNNING.
         assert snapshots[0][-1].layer is DetectionLayer.REGEX
         assert snapshots[0][-1].status is LayerStatus.RUNNING
-        # Laatste callback bevat drie afgeronde lagen (regex, spacy, llm-disabled).
+        # Laatste callback bevat drie afgeronde lagen (regex, deduce, llm-disabled).
         final = snapshots[-1]
         assert [t.layer for t in final] == [
             DetectionLayer.REGEX,
-            DetectionLayer.SPACY,
+            DetectionLayer.DEDUCE,
             DetectionLayer.LLM,
         ]
         assert all(t.status is not LayerStatus.RUNNING for t in final)
@@ -291,15 +282,15 @@ class TestOverlapResolution:
             start=0,
             end=9,
         )
-        spacy_ent = Entity(
+        deduce_ent = Entity(
             original="456782",
             entity_type=EntityType.NAME,
             confidence=0.9,
-            detection_layer=DetectionLayer.SPACY,
+            detection_layer=DetectionLayer.DEDUCE,
             start=3,
             end=9,
         )
-        merged = _merge_cross_layer([[regex_ent], [spacy_ent]])
+        merged = _merge_cross_layer([[regex_ent], [deduce_ent]])
         assert merged == [regex_ent]
 
 
@@ -375,33 +366,39 @@ class TestThresholdRouting:
 
 
 # ---------------------------------------------------------------------------
-# spaCy-laag
+# DEDUCE-laag
 # ---------------------------------------------------------------------------
 
 
-@skip_no_spacy
-class TestSpaCyLayer:
+@skip_no_deduce
+class TestDeduceLayer:
     def test_finds_dutch_person_name(self) -> None:
-        entities = detect_spacy("Patiënt heet Jan Pietersen en woont in Deventer.")
+        entities, status = detect_deduce_with_status(
+            "Patiënt heet Jan Pietersen en woont in Deventer."
+        )
+        assert status is LayerStatus.OK
         names = [e for e in entities if e.entity_type is EntityType.NAME]
-        assert names, "spaCy moet 'Jan Pietersen' als PER detecteren"
+        assert names, "DEDUCE moet 'Jan Pietersen' als NAME detecteren"
         assert any("Pietersen" in e.original for e in names)
+        assert all(e.detection_layer is DetectionLayer.DEDUCE for e in entities)
 
     def test_finds_organization(self) -> None:
-        entities = detect_spacy("OLVG en Catharina Ziekenhuis werken samen.")
+        entities, status = detect_deduce_with_status(
+            "OLVG en Catharina Ziekenhuis werken samen."
+        )
+        assert status is LayerStatus.OK
         orgs = [e for e in entities if e.entity_type is EntityType.ORG]
-        assert orgs, "spaCy moet OLVG of Catharina als ORG detecteren"
+        assert orgs, "DEDUCE moet OLVG of Catharina als ORG detecteren"
 
 
-def test_detect_spacy_without_model_is_soft_fail(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Forceer een OSError uit spacy.load om de soft-fail-tak te raken.
-    monkeypatch.setattr(settings, "spacy_model", "nonexistent_model_zzz")
-    _get_spacy_nlp.cache_clear()
-    result = detect_spacy("Wat dan ook.")
-    assert result == []
-    _get_spacy_nlp.cache_clear()
+def test_detect_deduce_unavailable_is_soft_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "proxy.detection.detect_deduce_entities",
+        lambda _text: (_ for _ in ()).throw(ImportError("no deduce")),
+    )
+    entities, status = detect_deduce_with_status("Wat dan ook.")
+    assert entities == []
+    assert status is LayerStatus.UNAVAILABLE
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +521,7 @@ def test_clinical_note_fixture_distinguishes_admission_from_birthdate() -> None:
 def test_regex_patterns_cover_all_typecodes_we_claim_to_detect() -> None:
     # Sanity: voorkom dat iemand een patroon verwijdert zonder
     # bijbehorende test te updaten. Niet alle EntityTypes komen uit regex
-    # (sommige uit spaCy/LLM/generalisering), maar de regex-laag claimt
+    # (sommige uit DEDUCE/LLM/generalisering), maar de regex-laag claimt
     # tenminste deze set.
     covered = {entity_type for entity_type, _, _ in REGEX_PATTERNS}
     expected_regex_types = {
@@ -545,5 +542,5 @@ def test_regex_patterns_cover_all_typecodes_we_claim_to_detect() -> None:
 
 
 def test_llm_type_map_only_targets_product_and_project() -> None:
-    # Laag 3 mag bewust niet alle types claimen die regex of spaCy al doen.
+    # Laag 3 mag bewust niet alle types claimen die regex of DEDUCE al doen.
     assert set(_LLM_TYPE_MAP.values()) == {EntityType.PRODUCT, EntityType.PROJECT}

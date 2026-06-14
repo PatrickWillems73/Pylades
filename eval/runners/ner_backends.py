@@ -19,9 +19,13 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from proxy.detection import _SPACY_LABEL_CONFIDENCE, _SPACY_LABEL_TO_TYPE
+from proxy.deduce_layer import (
+    deduce_available,
+    detect_deduce_entities,
+    supplement_deduce_name_entities,
+)
 from proxy.name_spans import expand_name_span
-from proxy.role_names import detect_role_context_name_spans
-from shared.models import EntityType
+from shared.models import DetectionLayer, Entity, EntityType
 
 
 class NerBackendError(RuntimeError):
@@ -52,8 +56,31 @@ class Ner2Backend(Protocol):
     def detect(self, text: str) -> list[NerSpan]: ...
 
 
+def _expand_name_spans(text: str, spans: list[NerSpan]) -> list[NerSpan]:
+    """Breid NAME-detecties uit (tussenvoegsels, aanspreekvormen, apostrofnamen)."""
+    expanded: list[NerSpan] = []
+    for span in spans:
+        if span.type is not EntityType.NAME:
+            expanded.append(span)
+            continue
+        new_start, new_end = expand_name_span(text, span.start, span.end)
+        if new_start == span.start and new_end == span.end:
+            expanded.append(span)
+            continue
+        expanded.append(
+            NerSpan(
+                start=new_start,
+                end=new_end,
+                text=text[new_start:new_end],
+                type=span.type,
+                score=span.score,
+            )
+        )
+    return expanded
+
+
 # ---------------------------------------------------------------------------
-# spaCy (md / lg) — drop-in; deelt de runtime-labelmapping
+# spaCy (md / lg) — eval-vergelijking; deelt labelmapping met detection.py
 # ---------------------------------------------------------------------------
 
 
@@ -274,112 +301,18 @@ class GlinerBackend:
 
 
 # ---------------------------------------------------------------------------
-# DEDUCE — rule-based NL-medische de-identificatie
+# DEDUCE — rule-based NL-medische de-identificatie (deelt proxy/deduce_layer)
 # ---------------------------------------------------------------------------
 
-# DEDUCE-tags (basis vóór een eventueel "+"/"_"-suffix) → Pylades-type. Alleen
-# de vrije-tekst-entiteiten; structuur-PII (datum, telefoon, patiëntnummer)
-# laten we aan de regex-laag over voor een eerlijke vergelijking.
-_DEDUCE_TAGS: dict[str, EntityType] = {
-    "patient": EntityType.NAME,
-    "persoon": EntityType.NAME,
-    "locatie": EntityType.LOCATION,
-    "instelling": EntityType.ORG,
-    "ziekenhuis": EntityType.ORG,
-}
 
-
-def _deduce_base_tag(tag: str) -> str:
-    """`persoon+initiaal` / `patient_naam` → `persoon` / `patient`."""
-    return tag.split("+", maxsplit=1)[0].split("_", maxsplit=1)[0].strip().lower()
-
-
-def _expand_name_spans(text: str, spans: list[NerSpan]) -> list[NerSpan]:
-    """Breid NAME-detecties uit (tussenvoegsels, aanspreekvormen, apostrofnamen)."""
-    expanded: list[NerSpan] = []
-    for span in spans:
-        if span.type is not EntityType.NAME:
-            expanded.append(span)
-            continue
-        new_start, new_end = expand_name_span(text, span.start, span.end)
-        if new_start == span.start and new_end == span.end:
-            expanded.append(span)
-            continue
-        expanded.append(
-            NerSpan(
-                start=new_start,
-                end=new_end,
-                text=text[new_start:new_end],
-                type=span.type,
-                score=span.score,
-            )
-        )
-    return expanded
-
-
-def _span_overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
-    return not (a[1] <= b[0] or b[1] <= a[0])
-
-
-def _merge_name_spans(text: str, spans: list[NerSpan], additions: list[NerSpan]) -> list[NerSpan]:
-    """Voeg NAME-spans toe; bij overlap wint de langste NAME-span."""
-    if not additions:
-        return spans
-    merged = list(spans)
-    for span in additions:
-        box = (span.start, span.end)
-        overlap_idxs = [
-            idx for idx, existing in enumerate(merged) if _span_overlaps(box, (existing.start, existing.end))
-        ]
-        if not overlap_idxs:
-            merged.append(span)
-            continue
-        if span.type is not EntityType.NAME:
-            continue
-        overlapping_names = [merged[i] for i in overlap_idxs if merged[i].type is EntityType.NAME]
-        if not overlapping_names:
-            continue
-        best = max(overlapping_names + [span], key=lambda s: (s.end - s.start, s.end))
-        if best is not span:
-            continue
-        merged = [
-            existing
-            for idx, existing in enumerate(merged)
-            if idx not in overlap_idxs or existing.type is not EntityType.NAME
-        ]
-        merged.append(span)
-    return merged
-
-
-def _coalesce_name_spans(spans: list[NerSpan]) -> list[NerSpan]:
-    """Laat bij overlappende NAME-detecties de langste span staan."""
-    names = [span for span in spans if span.type is EntityType.NAME]
-    if len(names) <= 1:
-        return spans
-    others = [span for span in spans if span.type is not EntityType.NAME]
-    kept: list[NerSpan] = []
-    for span in sorted(names, key=lambda s: (s.end - s.start, s.end), reverse=True):
-        if any(_span_overlaps((span.start, span.end), (k.start, k.end)) for k in kept):
-            continue
-        kept.append(span)
-    return others + kept
-
-
-def _role_context_name_spans(text: str) -> list[NerSpan]:
-    return [
-        NerSpan(start=start, end=end, text=surface, type=EntityType.NAME, score=0.85)
-        for start, end, surface in detect_role_context_name_spans(text)
-    ]
-
-
-def _supplement_name_spans(text: str, spans: list[NerSpan], fallback: Ner2Backend) -> list[NerSpan]:
-    """Vul ontbrekende NAME-spans aan via een secundaire laag-2-backend (GLiNER)."""
-    additions = [
-        span
-        for span in fallback.detect(text)
-        if span.type is EntityType.NAME
-    ]
-    return _merge_name_spans(text, spans, additions)
+def _entity_to_ner_span(ent: Entity) -> NerSpan:
+    return NerSpan(
+        start=ent.start,
+        end=ent.end,
+        text=ent.original,
+        type=ent.entity_type,
+        score=ent.confidence,
+    )
 
 
 class DeduceBackend:
@@ -390,25 +323,19 @@ class DeduceBackend:
     desc = "deduce (NL-medisch + rol-NAME-heuristiek)"
 
     def __init__(self, *, name_fallback: bool = False) -> None:
-        self._deduce: Any | None = None
         self._name_fallback = name_fallback
         self._gliner: GlinerBackend | None = None
 
     def ensure_available(self) -> None:
-        if self._deduce is not None:
+        if deduce_available():
             return
         try:
-            from deduce import Deduce  # noqa: PLC0415
+            import deduce  # noqa: F401, PLC0415
         except ImportError as exc:
             raise NerBackendError(
-                "DEDUCE ontbreekt. Installeer de eval-extra:\n    uv sync --extra eval"
+                "DEDUCE ontbreekt. Installeer de hoofd-dependencies:\n    uv sync"
             ) from exc
-        try:
-            self._deduce = Deduce()
-        except Exception as exc:  # noqa: BLE001 - init/lookup-data-fouten generiek melden
-            raise NerBackendError(
-                f"DEDUCE initialiseren mislukte: {type(exc).__name__}: {exc}"
-            ) from exc
+        raise NerBackendError("DEDUCE initialiseren mislukte (zie logs)")
 
     def _gliner_fallback(self) -> GlinerBackend:
         if self._gliner is None:
@@ -418,25 +345,25 @@ class DeduceBackend:
 
     def detect(self, text: str) -> list[NerSpan]:
         self.ensure_available()
-        assert self._deduce is not None
-        doc = self._deduce.deidentify(text)
-        spans: list[NerSpan] = []
-        for ann in doc.annotations:
-            etype = _DEDUCE_TAGS.get(_deduce_base_tag(str(ann.tag)))
-            if etype is None:
-                continue
-            spans.append(
-                NerSpan(
-                    start=ann.start_char,
-                    end=ann.end_char,
-                    text=ann.text,
-                    type=etype,
-                    score=1.0,
-                )
-            )
-        spans = _merge_name_spans(text, spans, _role_context_name_spans(text))
-        spans = _expand_name_spans(text, spans)
         if self._name_fallback:
-            spans = _supplement_name_spans(text, spans, self._gliner_fallback())
-            spans = _expand_name_spans(text, spans)
-        return _coalesce_name_spans(spans)
+            gliner = self._gliner_fallback()
+
+            def supplement(t: str, entities: list[Entity]) -> list[Entity]:
+                additions = [
+                    Entity(
+                        original=span.text,
+                        entity_type=span.type,
+                        confidence=span.score,
+                        detection_layer=DetectionLayer.DEDUCE,
+                        start=span.start,
+                        end=span.end,
+                    )
+                    for span in gliner.detect(t)
+                    if span.type is EntityType.NAME
+                ]
+                return supplement_deduce_name_entities(t, entities, additions)
+
+            entities = detect_deduce_entities(text, supplement_names=supplement)
+        else:
+            entities = detect_deduce_entities(text)
+        return [_entity_to_ner_span(ent) for ent in entities]

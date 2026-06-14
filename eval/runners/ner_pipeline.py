@@ -68,7 +68,7 @@ class NerPipelineRunner:
         for span in self._backend.detect(prompt):
             if any(_overlap((span.start, span.end), t) for t in taken):
                 continue
-            merged.append(_Merged(_entity_from_span(span), self._backend.layer))
+            merged.append(_Merged(_entity_from_span(span, self._backend.layer), self._backend.layer))
             taken.append((span.start, span.end))
 
         latency_ms = (time.perf_counter() - start) * 1000.0
@@ -94,14 +94,16 @@ class NerPipelineRunner:
         )
 
 
-def _entity_from_span(span: NerSpan) -> Entity:
-    # detection_layer is voor de outbound-/generalisatielogica irrelevant
-    # (die kijkt alleen naar type en offsets); SPACY is de canonieke laag-2-waarde.
+def _entity_from_span(span: NerSpan, layer: str) -> Entity:
+    detection_layer = {
+        "spacy": DetectionLayer.SPACY,
+        "deduce": DetectionLayer.DEDUCE,
+    }.get(layer, DetectionLayer.DEDUCE)
     return Entity(
         original=span.text,
         entity_type=span.type,
         confidence=max(0.0, min(1.0, span.score)),
-        detection_layer=DetectionLayer.SPACY,
+        detection_layer=detection_layer,
         start=span.start,
         end=span.end,
     )

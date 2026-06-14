@@ -156,11 +156,9 @@ def format_duration_ms(ms: float | None) -> str:
     return f"{rounded:,}".replace(",", ".") + "ms"
 
 
-def _spacy_layer_label() -> str:
-    """``NER (spaCy md)`` uit ``settings.spacy_model`` (``nl_core_news_md``)."""
-    model = settings.spacy_model
-    suffix = model.rsplit("_", 1)[-1] if "_" in model else model
-    return f"NER (spaCy {suffix})"
+def _deduce_layer_label() -> str:
+    """Label voor runtime laag 2 in de voortgangsindicator."""
+    return "DEDUCE (NL-medisch)"
 
 
 def external_llm_label(template: Template) -> str:
@@ -179,8 +177,8 @@ _LAYER_STATUS_TO_STEP: dict[LayerStatus, StepStatus] = {
 def _detection_step(timing: LayerTiming) -> ProgressStep:
     if timing.layer is DetectionLayer.REGEX:
         label = "Dryrun identificatielaag RegEx"
-    elif timing.layer is DetectionLayer.SPACY:
-        label = f"Dryrun identificatielaag {_spacy_layer_label()}"
+    elif timing.layer is DetectionLayer.DEDUCE:
+        label = f"Dryrun identificatielaag {_deduce_layer_label()}"
     else:
         label = f"Dryrun identificatielaag intern LLM ({settings.ollama_model})"
 

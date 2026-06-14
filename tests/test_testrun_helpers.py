@@ -132,7 +132,7 @@ def test_analyze_prompt_timed_returns_layer_timings(pylades_env: None) -> None:
     result, timings = analyze_prompt_timed(template, "BSN 123456782.")
     assert isinstance(result, AnalysisResult)
     # Drie detectielagen, laag 3 (LLM) uit omdat use_llm=False.
-    assert [t.layer.value for t in timings] == ["regex", "spacy", "llm"]
+    assert [t.layer.value for t in timings] == ["regex", "deduce", "llm"]
     assert timings[-1].status is LayerStatus.DISABLED
 
 
@@ -152,14 +152,14 @@ def test_progress_steps_appends_pending_external_step() -> None:
     template = _basic_template()
     timings = [
         LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
-        LayerTiming(_layer("spacy"), LayerStatus.OK, 58.0, 0),
+        LayerTiming(_layer("deduce"), LayerStatus.OK, 58.0, 0),
         LayerTiming(_layer("llm"), LayerStatus.DISABLED, None, 0),
     ]
     steps = progress_steps(timings, template)
     assert len(steps) == 4
     assert steps[0].label == "Dryrun identificatielaag RegEx"
     assert steps[0].status is StepStatus.DONE
-    assert "NER (spaCy" in steps[1].label
+    assert "DEDUCE" in steps[1].label
     assert steps[2].status is StepStatus.DISABLED
     assert steps[2].note == "staat uit in deze opdracht"
     # Externe-LLM-stap staat standaard op pending.
@@ -171,7 +171,7 @@ def test_progress_steps_marks_unavailable_layer() -> None:
     template = _basic_template()
     timings = [
         LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
-        LayerTiming(_layer("spacy"), LayerStatus.UNAVAILABLE, 3.0, 0),
+        LayerTiming(_layer("deduce"), LayerStatus.UNAVAILABLE, 3.0, 0),
         LayerTiming(_layer("llm"), LayerStatus.UNAVAILABLE, 12.0, 0),
     ]
     steps = progress_steps(timings, template)
@@ -203,7 +203,7 @@ def test_with_external_step_replaces_trailing_external_only() -> None:
     template = _basic_template()
     timings = [
         LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
-        LayerTiming(_layer("spacy"), LayerStatus.OK, 58.0, 0),
+        LayerTiming(_layer("deduce"), LayerStatus.OK, 58.0, 0),
         LayerTiming(_layer("llm"), LayerStatus.DISABLED, None, 0),
     ]
     base = progress_steps(timings, template)
@@ -218,7 +218,7 @@ def test_progress_panel_html_renders_one_block_with_steps() -> None:
     template = _basic_template()
     timings = [
         LayerTiming(_layer("regex"), LayerStatus.OK, 24.0, 1),
-        LayerTiming(_layer("spacy"), LayerStatus.RUNNING, None, 0),
+        LayerTiming(_layer("deduce"), LayerStatus.RUNNING, None, 0),
         LayerTiming(_layer("llm"), LayerStatus.DISABLED, None, 0),
     ]
     html_out = progress_panel_html(progress_steps(timings, template))

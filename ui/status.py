@@ -72,7 +72,7 @@ def check_ollama() -> StatusCheck:
             fix_command=f"ollama serve\nollama pull {settings.ollama_model}",
             fix_hint=(
                 "Ollama is alleen nodig als je laag-3-detectie wilt gebruiken; "
-                "zonder Ollama draait de pijplijn met regex + spaCy."
+                "zonder Ollama draait de pijplijn met regex + DEDUCE."
             ),
         )
     if response.status_code != 200:
@@ -99,31 +99,19 @@ def check_ollama() -> StatusCheck:
     return StatusCheck(name="Ollama", ok=True, message=f"OK; model {settings.ollama_model}")
 
 
-def check_spacy() -> StatusCheck:
-    """Controleert of `spacy.util.is_package(spacy_model)` waar is.
+def check_deduce() -> StatusCheck:
+    """Controleert of DEDUCE (runtime laag 2) importeerbaar en initialiseerbaar is."""
+    from proxy.deduce_layer import deduce_available  # noqa: PLC0415
 
-    Volle `spacy.load()` zou ~5s kosten op de M1; voor een statuscard is dat
-    onnodig — een installatiecheck is voldoende voor de UI.
-    """
-    try:
-        import spacy  # noqa: PLC0415
-    except ImportError:
-        return StatusCheck(
-            name="spaCy",
-            ok=False,
-            message="spaCy-package niet geïnstalleerd",
-            fix_command="uv sync",
-            fix_hint="Voer `uv sync` uit om alle dependencies te installeren.",
-        )
-    if not spacy.util.is_package(settings.spacy_model):
-        return StatusCheck(
-            name="spaCy",
-            ok=False,
-            message=f"Model {settings.spacy_model!r} niet geïnstalleerd",
-            fix_command=f"uv run python -m spacy download {settings.spacy_model}",
-            fix_hint="Het NL-model is een aparte download; ~50MB.",
-        )
-    return StatusCheck(name="spaCy", ok=True, message=f"OK; model {settings.spacy_model}")
+    if deduce_available():
+        return StatusCheck(name="DEDUCE", ok=True, message="OK; NL-medische laag 2")
+    return StatusCheck(
+        name="DEDUCE",
+        ok=False,
+        message="DEDUCE niet beschikbaar (import of initialisatie mislukt)",
+        fix_command="uv sync",
+        fix_hint="Voer `uv sync` uit om alle dependencies te installeren.",
+    )
 
 
 def _can_open_sqlite(path: Path) -> bool:
@@ -164,4 +152,4 @@ def check_databases() -> StatusCheck:
 
 def run_all_checks() -> list[StatusCheck]:
     """Voer alle vier statuscontroles uit in vaste volgorde."""
-    return [check_proxy(), check_ollama(), check_spacy(), check_databases()]
+    return [check_proxy(), check_ollama(), check_deduce(), check_databases()]
