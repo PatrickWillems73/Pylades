@@ -1,7 +1,7 @@
-# Pylades v0.2.3
+# Pylades v0.2.6
 
 > Lokale pseudonimiseringsproxy voor extern LLM-gebruik in de zorg.
-> **Huidige release:** v0.2.3 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
+> **Huidige release:** v0.2.6 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
 > **Pylades** is in de Griekse mythologie de trouwe metgezel van Orestes —
 > een archetype van onvoorwaardelijke vriendschap: een metgezel aan wie je
 > alles toevertrouwt.
@@ -31,7 +31,7 @@ Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
 
 ## Status
 
-Pylades v0.2.3 is een **proof of concept** op één persoonlijke machine.
+Pylades v0.2.6 is een **proof of concept** op één persoonlijke machine.
 Productie-inzet op echte zorgdata is **niet** toegestaan zonder formele
 FG/DPO-toetsing. Zie [Productie-disclaimer](#productie-disclaimer-verplicht-lezen)
 hieronder.
@@ -42,8 +42,8 @@ hieronder.
 
 Pylades zit **tussen** jouw applicatie en een extern LLM. Voordat tekst het netwerk op gaat:
 
-1. **Detecteert** het persoonsgegevens — regex, spaCy NER, en optioneel een
-   lokaal Ollama-model voor jargon en productnamen.
+1. **Detecteert** het persoonsgegevens — regex, DEDUCE (NL-medisch NER), en
+   optioneel een lokaal Ollama-model voor jargon en productnamen.
 2. **Generaliseert** waar mogelijk — geboortedatum wordt jaar, postcode PC6
    wordt PC2, leeftijd ≥90 wordt `"90+"`.
 3. **Pseudonimiseert** wat overblijft — deterministische HMAC-pseudoniemen,
@@ -98,11 +98,11 @@ opslag als die ontbreekt.
 
 ## Productie-disclaimer (verplicht lezen)
 
-Pylades v0.2.3 implementeert 12 specifieke business rules uit een
+Pylades v0.2.6 implementeert 12 specifieke business rules uit een
 zorg-georiënteerde functionele specificatie (richting doelversie v0.3), maar is **niet productie-geschikt
 voor zorgdata**. Ontbrekende productie-vereisten zijn onder andere:
 
-- Medisch NER-model (BR-A03)
+- Medisch NER-model (BR-A03) — aanvullend naast DEDUCE/regex
 - K-anonimiteit en l-diversity (BR-D-serie)
 - DPA met LLM-aanbieder (BR-E-serie)
 - TLS 1.3 met mTLS (BR-F01)
@@ -134,7 +134,7 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 
 ## Versie
 
-- **Huidige release:** v0.2.3 — enige bron: [`shared/version.py`](shared/version.py)
+- **Huidige release:** v0.2.6 — enige bron: [`shared/version.py`](shared/version.py)
   (sync met `pyproject.toml`; test: `tests/test_version.py`).
 - **Doelversie:** v0.3 (`TARGET_VERSION` in [`shared/version.py`](shared/version.py)).
 - **Spec v0.3:** [PLAN.md](PLAN.md) en [SPEC-v0.3.md](SPEC-v0.3.md).
@@ -148,7 +148,7 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 | Proxy | FastAPI, Python 3.11+ |
 | UI | Streamlit |
 | Detectie laag 1 | Regex (BSN, e-mail, telefoon, IBAN, …) |
-| Detectie laag 2 | spaCy `nl_core_news_md` |
+| Detectie laag 2 | DEDUCE 3.x (NL-medisch; rule-based NER) |
 | Detectie laag 3 | Ollama + `qwen3:1.7b` (optioneel, standaard uit) |
 | Pseudonimisering | HMAC-SHA-256, session-key |
 | Content-DB | SQLite (`pylades-content.db`) |
@@ -186,7 +186,6 @@ lokaal te draaien — alleen om zelf naar GitHub te pushen.
 git clone git@github.com:PatrickWillems73/Pylades.git pylades && cd pylades
 cp .env.example .env          # vul ANTHROPIC_API_KEY in
 uv sync --extra dev
-uv run python -m spacy download nl_core_news_md
 uv run python scripts/pylades_services.py restart
 ```
 
@@ -197,7 +196,6 @@ git clone https://github.com/PatrickWillems73/Pylades.git pylades
 cd pylades
 Copy-Item .env.example .env   # vul ANTHROPIC_API_KEY in
 uv sync --extra dev
-uv run python -m spacy download nl_core_news_md
 uv run python scripts/pylades_services.py restart
 ```
 
@@ -262,13 +260,14 @@ Optioneel voor **ui_preview.py** (shadcn-/option-menu-demo's):
 uv sync --extra dev --extra preview
 ```
 
-### 3. spaCy NL-model (laag 2)
+### 3. DEDUCE (laag 2)
 
-```bash
-uv run python -m spacy download nl_core_news_md
-```
+Laag 2 zit in de hoofd-dependencies (`deduce>=3.0.0`) en wordt geïnstalleerd
+met `uv sync`. Geen aparte modeldownload nodig. De Status-pagina toont of
+DEDUCE importeerbaar en initialiseerbaar is.
 
-Dit downloadt ~50 MB en hoeft maar één keer.
+Optioneel voor **NER-modelvergelijking** in het eval-harnas (spaCy md/lg,
+GLiNER): `uv sync --extra eval` — zie [TESTPLAN.md](TESTPLAN.md).
 
 ### 4. Ollama (laag 3, optioneel)
 
@@ -406,10 +405,12 @@ Op de Config-pagina staat een rotatie-flow met vijf stappen:
 
 ## Status project (v0.3-spec)
 
-Wat er nu staat (release v0.2.3):
+Wat er nu staat (release v0.2.6):
 
 - Volledige proxy-pipeline: detect → generalize → pseudonymize → Anthropic →
-  de-pseudonymize
+  de-pseudonymize (laag 2: DEDUCE + rol-heuristiek)
+- Eval-harnas met privacy-gates en NER-vergelijking (`eval.py`; zie
+  [TESTPLAN.md](TESTPLAN.md))
 - Streamlit UI: Home (testrun-flow met Compact/Uitgebreid-modus), Status,
   Opdrachten, Review-queue, Audit, Config
 - Volledige geautomatiseerde testsuite groen (`uv run pytest tests/ -v`)
@@ -459,7 +460,7 @@ Conventies:
             │ HTTPS (Pylades body-contract: template_id + dossier)
             ▼
 [FastAPI proxy :8080]
-   ├─► Stage 1: DETECT  — regex → spaCy NL → (Ollama, optioneel)
+   ├─► Stage 1: DETECT  — regex → DEDUCE → (Ollama, optioneel)
    │   Confidence < threshold? → REVIEW QUEUE → pauze
    ├─► Stage 2: GENERALIZE — geboortedatum→jaar, PC6→PC2, leeftijd ≥90 → "90+",
    │                          opnamedatum → maand-jaar, zeldzame ICD-10 → review
@@ -471,7 +472,7 @@ Conventies:
 
 [Streamlit UI :8501]
    ├─► Home            (testrun-flow; Compact + Uitgebreid)
-   ├─► Status          (proxy/Ollama/spaCy/DB-health)
+   ├─► Status          (proxy/Ollama/DEDUCE/DB-health)
    ├─► Opdrachten       (per-EntityType modus-override)
    ├─► Review-queue    (manual review)
    ├─► Audit           (recente requests)
@@ -489,7 +490,7 @@ Buiten scope van v0.3, expliciet geadresseerd in v1.0:
 - **Encryptie at rest** — `pylades-content.db` en/of `original_prompt_hash`
   i.p.v. plaintext audit-opdrachten
 - **Provider-agnostiek** — OpenAI, Google, on-premise modellen via adapter-laag
-- **Medisch NER** (BR-A03) — gespecialiseerd model naast regex/spaCy
+- **Medisch NER** (BR-A03) — gespecialiseerd model naast regex/DEDUCE
 - **K-anonimiteit + l-diversity** (BR-D-serie) — statistische privacy-garanties
 - **DPA-template** met LLM-aanbieder (BR-E-serie)
 - **TLS 1.3 + mTLS** (BR-F01)
