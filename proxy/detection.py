@@ -24,6 +24,7 @@ from time import perf_counter
 from typing import Any, Final, Protocol
 
 from proxy.name_spans import expand_name_span
+from proxy.role_names import detect_role_context_name_spans
 from shared.config import settings
 from shared.crypto import validate_bsn_elfproef, validate_iban_checksum
 from shared.db import get_config_value
@@ -382,6 +383,24 @@ def detect_spacy(text: str) -> list[Entity]:
     return detect_spacy_with_status(text)[0]
 
 
+_ROLE_CONTEXT_CONFIDENCE: Final[float] = 0.85
+
+
+def detect_role_context(text: str) -> list[Entity]:
+    """Laag 2b: context-NAME-heuristiek (zorgrollen/relaties) na spaCy."""
+    return [
+        Entity(
+            original=surface,
+            entity_type=EntityType.NAME,
+            confidence=_ROLE_CONTEXT_CONFIDENCE,
+            detection_layer=DetectionLayer.SPACY,
+            start=start,
+            end=end,
+        )
+        for start, end, surface in detect_role_context_name_spans(text)
+    ]
+
+
 _LLM_SYSTEM_PROMPT: Final[str] = (
     "Je bent een NER-assistent voor Nederlandse zorgteksten. Identificeer "
     "alléén product-namen (medicijnen, apparaten) en project-codes. Negeer "
@@ -661,7 +680,37 @@ def detect_all_timed(
     _emit()
 
     merged = _merge_cross_layer((regex_entities, spacy_entities, llm_entities))
+    role_entities = detect_role_context(text)
+    merged = _merge_name_supplements(merged, role_entities)
     return _route_by_threshold(merged, effective_thresholds), timings
+
+
+def _merge_name_supplements(merged: list[Entity], additions: list[Entity]) -> list[Entity]:
+    """Voeg NAME-spans toe; bij overlap wint de langste span."""
+    result = list(merged)
+    for add in additions:
+        if add.entity_type is not EntityType.NAME:
+            continue
+        add_box = (add.start, add.end)
+        overlap_idxs = [
+            idx
+            for idx, existing in enumerate(result)
+            if existing.entity_type is EntityType.NAME
+            and _overlap(add_box, (existing.start, existing.end))
+        ]
+        if not overlap_idxs:
+            result.append(add)
+            continue
+        best_existing = max(
+            (result[idx] for idx in overlap_idxs),
+            key=lambda ent: (ent.end - ent.start, ent.end),
+        )
+        if (add.end - add.start) <= (best_existing.end - best_existing.start):
+            continue
+        for idx in sorted(overlap_idxs, reverse=True):
+            del result[idx]
+        result.append(add)
+    return result
 
 
 def _merge_cross_layer(

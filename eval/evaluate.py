@@ -24,6 +24,7 @@ from datetime import datetime
 from statistics import mean
 from typing import Any
 
+from eval.metrics.generalization import generalization_failures
 from eval.metrics.scoring import (
     Counts,
     Leak,
@@ -37,6 +38,7 @@ from eval.metrics.scoring import (
 from eval.runners.base import Runner
 from eval.schema import EvalRecord
 from proxy.detection import detector_layers_by_type
+from proxy.generalization import GeneralizationConfig
 from shared.models import ENTITY_CATEGORY_MAP, EntityCategory, EntityType
 
 # Categorieën waarvoor we blootstelling rapporteren; alleen direct-identifiers
@@ -280,6 +282,9 @@ def evaluate(
     layer_counts: dict[EntityType, Counter[str]] = defaultdict(Counter)
     latencies: list[float] = []
     over_redaction = 0
+    gen_config = GeneralizationConfig()
+    generalization_checked = 0
+    generalization_failures_items: list[dict[str, Any]] = []
 
     category_totals: dict[EntityCategory, int] = defaultdict(int)
     exposure_items: dict[EntityCategory, list[dict[str, Any]]] = {
@@ -304,6 +309,11 @@ def evaluate(
 
         record_leaks, redacted = _score_one_record(record, out, acc)
         over_redaction += redacted
+        if record.expected_generalization:
+            generalization_checked += len(record.expected_generalization)
+            generalization_failures_items.extend(
+                generalization_failures(record, out.predicted, config=gen_config)
+            )
         per_record.append(
             {
                 "id": record.id,
@@ -345,6 +355,10 @@ def evaluate(
 
     overlap_scores = {mode: _score_block(per_type[mode]) for mode in _MODES}
     latency_mean_ms = round(mean(latencies), 2) if latencies else 0.0
+    generalization_ok = generalization_checked - len(generalization_failures_items)
+    generalization_rate = (
+        generalization_ok / generalization_checked if generalization_checked else 1.0
+    )
 
     return {
         "runner": runner.name,
@@ -390,6 +404,12 @@ def evaluate(
         },
         "exposure": exposure_block,
         "over_redaction": over_redaction,
+        "generalization": {
+            "checked": generalization_checked,
+            "ok": generalization_ok,
+            "rate": round(generalization_rate, 4),
+            "failures": generalization_failures_items,
+        },
         "latency": {
             "mean_ms": latency_mean_ms,
             "p50_ms": round(_percentile(latencies, 0.50), 2),

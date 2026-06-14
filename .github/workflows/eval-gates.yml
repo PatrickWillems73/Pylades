@@ -1,0 +1,33 @@
+name: Eval gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  eval-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra eval
+
+      - name: Pytest eval gates and scoring
+        run: |
+          uv run --extra dev --extra eval python -m pytest \
+            tests/test_eval_gates.py \
+            tests/test_eval_scoring.py \
+            tests/test_eval_generalization.py \
+            tests/test_detection.py \
+            tests/test_generalization.py \
+            tests/test_name_spans.py \
+            tests/test_role_names.py \
+            tests/test_version.py \
+            -q

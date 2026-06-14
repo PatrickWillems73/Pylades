@@ -303,6 +303,18 @@ class TestOverlapResolution:
         assert merged == [regex_ent]
 
 
+class TestRoleContextNames:
+    def test_detect_all_includes_role_context_name(self) -> None:
+        text = "Verpleegkundig specialist: Okonkwo\nAnamnese:"
+        result = detect_all(text, thresholds=Thresholds())
+        names = [
+            e.original
+            for e in result.confident_entities
+            if e.entity_type is EntityType.NAME
+        ]
+        assert "Okonkwo" in names
+
+
 class TestThresholdRouting:
     def test_default_thresholds_send_regex_to_confident(self) -> None:
         result = detect_all(

@@ -189,11 +189,19 @@ def format_run_summary(report: dict[str, Any]) -> str:
     direct_macro_f1 = perf.get("direct_identifier_macro_f1", 0)
     indirect_macro_f1 = perf.get("indirect_identifier_macro_f1", 0)
     mean_ms = perf.get("latency_mean_ms", report.get("latency", {}).get("mean_ms", 0))
+    gen = report.get("generalization", {})
+    gen_line = ""
+    if gen.get("checked"):
+        gen_line = (
+            f"\nGeneralisatie BR-B: {_nl_num(gen.get('ok', 0))}/"
+            f"{_nl_num(gen.get('checked', 0))} "
+            f"({_nl_num(round(float(gen.get('rate', 0)) * 100, 1))}%)"
+        )
     performance = (
         "Performance van de testrun\n"
         f"Direct-identifier macro-F1: {_nl_num(direct_macro_f1)}\n"
         f"Indirect-identifier macro-F1: {_nl_num(indirect_macro_f1)}\n"
-        f"Latency mean: {_nl_num(mean_ms)}ms"
+        f"Latency mean: {_nl_num(mean_ms)}ms{gen_line}"
     )
     return f"{header}\n\n{performance}"
 

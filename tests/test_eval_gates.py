@@ -103,7 +103,16 @@ def test_synthetic_dataset_zero_direct_leaks_without_gliner(
 
 
 def test_report_has_expected_structure(normal_report: dict) -> None:
-    for key in ("scores", "confusion", "leaks", "exposure", "latency", "per_record", "performance"):
+    for key in (
+        "scores",
+        "confusion",
+        "leaks",
+        "exposure",
+        "generalization",
+        "latency",
+        "per_record",
+        "performance",
+    ):
         assert key in normal_report
     assert "exact" in normal_report["scores"]
     assert "overlap" in normal_report["scores"]

@@ -135,7 +135,7 @@ en `dataset-10dossiers.jsonl` niet door elkaar lopen. De dataset wordt **gepind*
 | Exposure quasi/clinical | ✅ | — |
 | Over-redactie (count) | ✅ | — |
 | Latency p50/p95 + warm-up | ✅ | warm-up gedekt in gate-tests |
-| Generalisatie BR-B01..B05 | ❌ nog open | — |
+| Generalisatie BR-B01..B05 | ✅ | — (rapporteren) |
 | Piek-RAM runtime | ❌ nog open | — |
 | Confidence-kalibratie | ❌ nog open | — |
 
@@ -144,8 +144,9 @@ en `dataset-10dossiers.jsonl` niet door elkaar lopen. De dataset wordt **gepind*
   `CLINICAL_SENSITIVE` worden gerapporteerd, niet geblokkeerd.
 - **Over-redactie-rate**: niet-PII dat onnodig gepseudonimiseerd wordt (geteld,
   nog geen drempel-gate).
-- **Generalisatie-correctheid** (BR-B01..B05): `expected_generalization` staat in
-  de dataset; scoring in `evaluate()` volgt nog (§13).
+- **Generalisatie-correctheid** (BR-B01..B05): `expected_generalization` wordt in
+  `evaluate()` vergeleken met `generalize_all()` op de voorspellingen; zie
+  `eval/metrics/generalization.py`.
 - Per model: **latency** p50/p95 op M1 8 GB. De eerste runner-aanroep betaalt
   eenmalige **cold-start**-kosten (lazy spaCy-load, ~1-2 s). `evaluate()` draait
   standaard eerst één **warm-up-aanroep**; die latency wordt weggegooid maar
@@ -277,8 +278,8 @@ tests/
 
 - Eval-only dependencies als optionele groep `eval` in
   [pyproject.toml](pyproject.toml); runtime blijft `nl_core_news_md` ongewijzigd.
-- CI: nieuw bestand onder `.github/workflows/` (nog niet aanwezig; alleen
-  issue/PR-templates bestaan) dat gate + rapport draait.
+- CI: `.github/workflows/eval-gates.yml` draait pytest op gates, scoring,
+  generalisatie en detectie-unit-tests.
 - Reproduceerbaarheid: model-versies en dataset-checksum gepind; seeds vast;
   omgeving (python/spaCy/model-versies) in elk rapport.
 
@@ -302,7 +303,7 @@ tests/
 | 3 | Adapters NER (md/lg/GLiNER/DEDUCE) → vergelijkend rapport | ✅ af |
 | 4 | Laag-3 lokale-LLM-benchmark | 🟡 backends + runners; systematische benchmark open |
 | 5 | Oracle/judge + triage → bug-backlog; opschalen naar ~600 | ❌ open |
-| 6 | FG-auditrapport + restrisico-register + CI-integratie | ❌ open |
+| 6 | FG-auditrapport + restrisico-register + CI-integratie | 🟡 CI-gates af; FG-deliverables open |
 
 ## 12. Gekozen defaults
 
@@ -343,7 +344,7 @@ Laatste update: juni 2026. Dit hoofdstuk volgt de voortgang t.o.v. §1–§12.
 
 ### Nog open (prioriteit)
 
-1. **Generalisatie-score** — `expected_generalization` verifiëren in `evaluate()`.
+1. ~~**Generalisatie-score**~~ — af (`eval/metrics/generalization.py`).
 2. **Dataset ~600** — genereren, valideren, pinnen; opnieuw triageren.
 3. **`eval/judge/`** — oracle/judge op steekproef (§3).
 4. **`eval/triage/`** — failure-clustering → bugrapporten (§3).
@@ -351,7 +352,7 @@ Laatste update: juni 2026. Dit hoofdstuk volgt de voortgang t.o.v. §1–§12.
 6. **Laag-3 benchmark** — systematische vergelijking modellen binnen 8 GB (fase 4).
 7. **Metrics** — piek-RAM runtime, confidence-kalibratie (§6).
 8. **FG/DPO** — auditrapport BR-A..BR-G, restrisico-register, DPIA-input (§10).
-9. **CI** — `.github/workflows/` met gate + rapport (§9).
+9. ~~**CI**~~ — af (`.github/workflows/eval-gates.yml`).
 
 ### Detectie-verbeteringen buiten het harnas (productie)
 
@@ -360,3 +361,4 @@ ze staan niet als aparte TESTPLAN-fase:
 
 - ADDRESS-regex (NL straat + huisnummer) in regex-laag 1.
 - Rol-context NAME-heuristiek en span-coalescence in de deduce-eval-adapter.
+- Rol-context NAME-heuristiek in runtime `detect_all()` ([proxy/detection.py](proxy/detection.py)).
