@@ -1015,6 +1015,14 @@ wheels = [
 ]
 
 [[package]]
+name = "nl-core-news-lg"
+version = "3.8.0"
+source = { url = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl", hash = "sha256:19a3cb18b92f775a0df0e61026e2a0f874e73aabb1b744b16230dfe573a3e34e" },
+]
+
+[[package]]
 name = "nl-core-news-md"
 version = "3.8.0"
 source = { url = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_md-3.8.0/nl_core_news_md-3.8.0-py3-none-any.whl" }
@@ -1797,7 +1805,7 @@ wheels = [
 
 [[package]]
 name = "pylades"
-version = "0.2.3"
+version = "0.2.4"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
@@ -1823,6 +1831,7 @@ dev = [
 eval = [
     { name = "deduce" },
     { name = "gliner" },
+    { name = "nl-core-news-lg" },
     { name = "presidio-analyzer" },
     { name = "psutil" },
     { name = "spacy-transformers" },
@@ -1840,6 +1849,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "markdown-it-py", specifier = ">=3.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
+    { name = "nl-core-news-lg", marker = "extra == 'eval'", url = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_lg-3.8.0/nl_core_news_lg-3.8.0-py3-none-any.whl" },
     { name = "nl-core-news-md", url = "https://github.com/explosion/spacy-models/releases/download/nl_core_news_md-3.8.0/nl_core_news_md-3.8.0-py3-none-any.whl" },
     { name = "ollama", specifier = ">=0.4" },
     { name = "presidio-analyzer", marker = "extra == 'eval'", specifier = ">=2.2" },

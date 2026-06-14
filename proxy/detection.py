@@ -21,8 +21,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from time import perf_counter
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
+from proxy.name_spans import expand_name_span
 from shared.config import settings
 from shared.crypto import validate_bsn_elfproef, validate_iban_checksum
 from shared.db import get_config_value
@@ -108,6 +109,16 @@ REGEX_PATTERNS: Final[list[tuple[EntityType, re.Pattern[str], Callable[[str], bo
         EntityType.BSN,
         re.compile(r"\b\d{9}\b"),
         validate_bsn_elfproef,
+    ),
+    (
+        EntityType.ADDRESS,
+        re.compile(
+            r"\b(?:[A-Z][\w-]+\s+)?[A-Za-z][\w-]*"
+            r"(?:straat|weg|laan|plein|gracht|kade|singel|dreef|pad|hof|boulevard|steeg)"
+            r"\s+\d{1,4}[A-Za-z]?\b",
+            re.IGNORECASE,
+        ),
+        None,
     ),
     (
         EntityType.POSTCODE_PC6,
@@ -350,14 +361,17 @@ def detect_spacy_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
         entity_type = _SPACY_LABEL_TO_TYPE.get(ent.label_)
         if entity_type is None:
             continue
+        start, end = ent.start_char, ent.end_char
+        if entity_type is EntityType.NAME:
+            start, end = expand_name_span(text, start, end)
         entities.append(
             Entity(
-                original=ent.text,
+                original=text[start:end],
                 entity_type=entity_type,
                 confidence=_SPACY_LABEL_CONFIDENCE.get(ent.label_, 0.85),
                 detection_layer=DetectionLayer.SPACY,
-                start=ent.start_char,
-                end=ent.end_char,
+                start=start,
+                end=end,
             )
         )
     return entities, LayerStatus.OK
@@ -377,31 +391,79 @@ _LLM_SYSTEM_PROMPT: Final[str] = (
 )
 
 
-def detect_llm_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
-    """Laag 3 met expliciete beschikbaarheidsstatus voor de voortgangsindicator.
+class Layer3BackendError(RuntimeError):
+    """Laag-3-backend vereist maar niet beschikbaar (eval fail-hard)."""
 
-    Soft-fail op elke fout: timeout, JSON-parse, model ontbreekt, Ollama
-    niet bereikbaar — laag 1+2 hebben hun werk al gedaan en de proxy mag
-    niet stoppen wegens een optionele laag. De status is `UNAVAILABLE`
-    zodra de aanroep faalt, zodat de UI "niet beschikbaar" kan tonen.
+
+class Layer3Backend(Protocol):
+    """Transport voor laag 3: lever ruwe JSON-tekst voor (system, user).
+
+    Door de transport te abstraheren kan de runtime Ollama gebruiken terwijl
+    het eval-harnas alternatieve lokale backends (bv. MLX) injecteert voor de
+    modelvergelijking (TESTPLAN.md §8), zonder de rest van de pijplijn te
+    dupliceren. Implementaties mogen excepties gooien bij falen; de caller
+    vangt die soft op.
     """
-    try:
+
+    name: str
+    model: str
+
+    def complete(self, system: str, user: str) -> str: ...
+
+
+class OllamaBackend:
+    """Default laag-3-backend: lokaal Ollama-model met JSON-grammar."""
+
+    name = "ollama"
+
+    def __init__(self, host: str | None = None, model: str | None = None) -> None:
+        self.host = host or settings.ollama_host
+        self.model = model or settings.ollama_model
+
+    def complete(self, system: str, user: str) -> str:
         import ollama  # noqa: PLC0415
 
-        client = ollama.Client(host=settings.ollama_host)
+        client = ollama.Client(host=self.host)
         response = client.chat(
-            model=settings.ollama_model,
+            model=self.model,
             messages=[
-                {"role": "system", "content": _LLM_SYSTEM_PROMPT},
-                {"role": "user", "content": text},
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
             ],
             format="json",
             options={"temperature": 0.0},
         )
-        content = response["message"]["content"]
+        return str(response["message"]["content"])
+
+
+def detect_llm_with_status(
+    text: str, *, backend: Layer3Backend | None = None
+) -> tuple[list[Entity], LayerStatus]:
+    """Laag 3 met expliciete beschikbaarheidsstatus voor de voortgangsindicator.
+
+    Soft-fail op elke fout: timeout, JSON-parse, model ontbreekt, backend
+    niet bereikbaar — laag 1+2 hebben hun werk al gedaan en de proxy mag
+    niet stoppen wegens een optionele laag. De status is `UNAVAILABLE`
+    zodra de aanroep faalt, zodat de UI "niet beschikbaar" kan tonen.
+
+    `backend` default naar `OllamaBackend()`; het eval-harnas kan een
+    alternatieve backend (bv. MLX) injecteren voor de modelvergelijking.
+    """
+    active = backend or OllamaBackend()
+    try:
+        content = active.complete(_LLM_SYSTEM_PROMPT, text)
     except Exception as exc:  # noqa: BLE001 (bewust breed: laag 3 faalt soft per BR)
+        if isinstance(exc, Layer3BackendError):
+            raise
+        if getattr(active, "fail_hard", False):
+            hint_fn = getattr(active, "unavailable_hint", None)
+            hint = f"\n{hint_fn()}" if hint_fn is not None else ""
+            raise Layer3BackendError(
+                f"Laag 3 ({active.name}) niet beschikbaar: {type(exc).__name__}: {exc}{hint}"
+            ) from exc
         logger.warning(
-            "Laag 3 (Ollama) faalde: %s: %s — sla LLM-detectie over",
+            "Laag 3 (%s) faalde: %s: %s — sla LLM-detectie over",
+            active.name,
             type(exc).__name__,
             exc,
         )
@@ -412,21 +474,51 @@ def detect_llm_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
     try:
         parsed = json.loads(content)
     except (json.JSONDecodeError, TypeError) as exc:
-        logger.warning("Laag 3 (Ollama) gaf geen geldige JSON: %s", exc)
+        if getattr(active, "fail_hard", False):
+            raise Layer3BackendError(
+                f"Laag 3 ({active.name}) gaf geen geldige JSON: {exc}"
+            ) from exc
+        logger.warning("Laag 3 (%s) gaf geen geldige JSON: %s", active.name, exc)
         return [], LayerStatus.UNAVAILABLE
 
     return _llm_entities_from_payload(text, parsed), LayerStatus.OK
 
 
-def detect_llm(text: str) -> list[Entity]:
-    """Laag 3: lokaal Ollama-LLM voor jargon/productnamen (zie `*_with_status`)."""
-    return detect_llm_with_status(text)[0]
+def detect_llm(text: str, *, backend: Layer3Backend | None = None) -> list[Entity]:
+    """Laag 3: lokaal LLM voor jargon/productnamen (zie `*_with_status`)."""
+    return detect_llm_with_status(text, backend=backend)[0]
 
 
 _LLM_TYPE_MAP: Final[dict[str, EntityType]] = {
     "product": EntityType.PRODUCT,
     "project": EntityType.PROJECT,
 }
+
+
+def detector_layers_by_type() -> dict[EntityType, tuple[DetectionLayer, ...]]:
+    """Welke detectielaag/lagen elk `EntityType` in principe kan detecteren.
+
+    Afgeleid van de daadwerkelijke detector-structuren (regex-patronen, spaCy-
+    en LLM-mappings) zodat deze map automatisch in sync blijft met de
+    implementatie. Types zonder enige detector — `ADDRESS`, `DIAGNOSIS` en
+    generalisatie-output (`BIRTH_YEAR`, `POSTCODE_PC2`) — ontbreken bewust in
+    het resultaat (geen detector). De laag-volgorde is regex → spaCy → LLM.
+    """
+    layers: dict[EntityType, set[DetectionLayer]] = {}
+    for etype, _pattern in CONTEXT_DATE_PATTERNS:
+        layers.setdefault(etype, set()).add(DetectionLayer.REGEX)
+    for etype, _pattern, _validator in REGEX_PATTERNS:
+        layers.setdefault(etype, set()).add(DetectionLayer.REGEX)
+    for etype in _SPACY_LABEL_TO_TYPE.values():
+        layers.setdefault(etype, set()).add(DetectionLayer.SPACY)
+    for etype in _LLM_TYPE_MAP.values():
+        layers.setdefault(etype, set()).add(DetectionLayer.LLM)
+
+    order = (DetectionLayer.REGEX, DetectionLayer.SPACY, DetectionLayer.LLM)
+    return {
+        etype: tuple(layer for layer in order if layer in found)
+        for etype, found in layers.items()
+    }
 
 
 def _llm_entities_from_payload(text: str, payload: object) -> list[Entity]:
@@ -481,13 +573,17 @@ def detect_all(
     *,
     use_llm: bool = False,
     thresholds: Thresholds | None = None,
+    llm_backend: Layer3Backend | None = None,
 ) -> DetectionResult:
     """Combineer alle lagen en route op confidence-threshold.
 
     Dunne wrapper rond `detect_all_timed` die de per-laag-timing weggooit;
     bestaande callers (proxy-pijplijn, eval) houden dezelfde signatuur.
+    `llm_backend` injecteert optioneel een alternatieve laag-3-backend.
     """
-    result, _timings = detect_all_timed(text, use_llm=use_llm, thresholds=thresholds)
+    result, _timings = detect_all_timed(
+        text, use_llm=use_llm, thresholds=thresholds, llm_backend=llm_backend
+    )
     return result
 
 
@@ -497,6 +593,7 @@ def detect_all_timed(
     use_llm: bool = False,
     thresholds: Thresholds | None = None,
     on_layer: Callable[[list[LayerTiming]], None] | None = None,
+    llm_backend: Layer3Backend | None = None,
 ) -> tuple[DetectionResult, list[LayerTiming]]:
     """Als `detect_all`, maar meet elke laag en levert per-laag-timing.
 
@@ -549,7 +646,7 @@ def detect_all_timed(
     if use_llm:
         _emit(LayerTiming(DetectionLayer.LLM, LayerStatus.RUNNING, None, 0))
         start = perf_counter()
-        llm_entities, llm_status = detect_llm_with_status(text)
+        llm_entities, llm_status = detect_llm_with_status(text, backend=llm_backend)
         timings.append(
             LayerTiming(
                 DetectionLayer.LLM,

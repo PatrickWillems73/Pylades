@@ -167,6 +167,13 @@ class TestRegexBasicPatterns:
         )
         assert [e.original for e in pc6s] == ["1234 AB", "5678CD"]
 
+    def test_dutch_street_address(self) -> None:
+        result = detect_regex("Bezoek op Doctor Kopstraat 1, 9697CF Boxmeer.")
+        addresses = [e for e in result if e.entity_type is EntityType.ADDRESS]
+        assert len(addresses) == 1
+        assert addresses[0].original == "Doctor Kopstraat 1"
+        assert addresses[0].detection_layer is DetectionLayer.REGEX
+
     def test_phone_with_dash_separator(self) -> None:
         result = detect_regex("Bel 06-12345678 voor info.")
         phones = [e for e in result if e.entity_type is EntityType.PHONE]

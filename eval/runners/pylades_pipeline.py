@@ -13,31 +13,11 @@ from __future__ import annotations
 import time
 
 from eval.runners.base import PredEntity, RunOutput
-from proxy.detection import Thresholds, detect_all
-from proxy.generalization import GeneralizationConfig, generalize_all
-from shared.models import SHORT_TYPE_CODES, Entity
-
-
-def _placeholder(entity: Entity) -> str:
-    return f"[{SHORT_TYPE_CODES[entity.entity_type]}]"
-
-
-def _substitute(text: str, entities: list[Entity]) -> str:
-    """Vervang niet-overlappende entity-spans door placeholders (langste-first-veilig)."""
-    ordered = sorted(entities, key=lambda e: e.start)
-    parts: list[str] = []
-    last = 0
-    prev_end = -1
-    for ent in ordered:
-        if ent.start < prev_end:
-            # Overlap zou tot dubbele vervanging leiden; sla de latere over.
-            continue
-        parts.append(text[last : ent.start])
-        parts.append(_placeholder(ent))
-        last = ent.end
-        prev_end = ent.end
-    parts.append(text[last:])
-    return "".join(parts)
+from eval.runners.outbound import build_outbound
+from proxy.detection import Layer3Backend, Thresholds, detect_all_timed
+from proxy.generalization import GeneralizationConfig
+from shared.config import settings
+from shared.models import DetectionLayer, Entity
 
 
 class PyladesPipelineRunner:
@@ -49,16 +29,36 @@ class PyladesPipelineRunner:
         name: str = "pylades_md",
         use_llm: bool = False,
         thresholds: Thresholds | None = None,
+        llm_backend: Layer3Backend | None = None,
     ) -> None:
         self.name = name
-        self._use_llm = use_llm
+        # Publiek zodat het rapport per type het concrete model kan benoemen
+        # (bv. "spacy md") en expliciet kan melden of laag 3 gedraaid is.
+        self.use_llm = use_llm
+        self.spacy_model = settings.spacy_model
+        self._llm_backend = llm_backend
+        # Toon het model van de geïnjecteerde backend indien aanwezig (bv. MLX),
+        # anders het Ollama-default dat detect_all gebruikt.
+        self.llm_model = llm_backend.model if llm_backend is not None else settings.ollama_model
         self._thresholds = thresholds or Thresholds()
         self._gen_config = GeneralizationConfig()
+        if llm_backend is not None:
+            ensure = getattr(llm_backend, "ensure_available", None)
+            if ensure is not None:
+                ensure()
 
     def run(self, prompt: str) -> RunOutput:
         start = time.perf_counter()
-        detection = detect_all(prompt, use_llm=self._use_llm, thresholds=self._thresholds)
+        detection, timings = detect_all_timed(
+            prompt,
+            use_llm=self.use_llm,
+            thresholds=self._thresholds,
+            llm_backend=self._llm_backend,
+        )
         latency_ms = (time.perf_counter() - start) * 1000.0
+        llm_status = next(
+            (t.status.value for t in timings if t.layer is DetectionLayer.LLM), None
+        )
 
         predicted: list[PredEntity] = []
         for ent in detection.confident_entities:
@@ -71,10 +71,14 @@ class PyladesPipelineRunner:
         # pending item blokkeert in productie de call (HTTP 423), dus de tekst
         # zou sowieso niet zo verzonden worden.
         all_detected = list(detection.confident_entities) + list(detection.pending_review)
-        gen_text, gen_entities = generalize_all(prompt, all_detected, self._gen_config)
-        outbound_text = _substitute(gen_text, gen_entities)
+        outbound_text = build_outbound(prompt, all_detected, self._gen_config)
 
-        return RunOutput(predicted=predicted, outbound_text=outbound_text, latency_ms=latency_ms)
+        return RunOutput(
+            predicted=predicted,
+            outbound_text=outbound_text,
+            latency_ms=latency_ms,
+            llm_status=llm_status,
+        )
 
 
 def _pred_from_entity(ent: Entity, *, pending: bool) -> PredEntity:

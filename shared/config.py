@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen3:1.7b"
 
+    # --- Eval-only: Ollama laag 3 via MLX-backend (Apple Silicon).
+    # Vereist `OLLAMA_MLX=1 ollama serve`; zie TESTPLAN.md §8 en runner
+    # `pylades_md_ollama_mlx`. Niet door de runtime gebruikt.
+    ollama_mlx_model: str = "qwen3.5:2b-nvfp4"
+
+    # --- Eval-only: alternatieve laag-3-backend via MLX (Apple Silicon).
+    # Niet door de runtime gebruikt; alleen het eval-harnas (TESTPLAN §8)
+    # injecteert deze backend om Ollama vs MLX te vergelijken. Start de server
+    # met: `uv run --with mlx-lm python -m mlx_lm.server --model <mlx_model> --port 8081`.
+    mlx_host: str = "http://localhost:8081"
+    mlx_model: str = "mlx-community/Qwen3-1.7B-4bit"
+
     # --- Detectie laag 2 ---
     spacy_model: str = "nl_core_news_md"
 

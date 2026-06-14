@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from ui.ui_extras import (
-    llm_markdown_to_html,
     llm_markdown_to_docs_clipboard_html,
+    llm_markdown_to_html,
     normalize_llm_markdown,
 )
 

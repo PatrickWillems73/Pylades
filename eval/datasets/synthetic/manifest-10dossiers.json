@@ -1,0 +1,11 @@
+{
+  "version": "synthetic-1",
+  "dataset_file": "dataset-10dossiers.jsonl",
+  "sha256": "1b4d00f3559c336d1b274f51141083e4c9fa1a8b9b4837ac74b96a7868841781",
+  "record_count": 10,
+  "seed": 1,
+  "generator": "synthetic.py via claude-opus-4-8",
+  "git_sha": "7b1a15e",
+  "created_at": "2026-06-09T12:21:44.095933+00:00",
+  "entity_count": 365
+}

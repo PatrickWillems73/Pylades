@@ -36,6 +36,9 @@ class RunOutput:
     predicted: list[PredEntity] = field(default_factory=list)
     outbound_text: str = ""
     latency_ms: float = 0.0
+    # Werkelijke status van laag 3 voor deze run: "ok" / "unavailable" /
+    # "disabled" (None = runner rapporteert geen laag-3-status).
+    llm_status: str | None = None
 
 
 class Runner(Protocol):
