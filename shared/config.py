@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     mlx_host: str = "http://localhost:8081"
     mlx_model: str = "mlx-community/Qwen3-1.7B-4bit"
 
-    # --- Detectie laag 2 ---
+    # --- Eval-only legacy (runner pylades_lg); runtime laag 2 is DEDUCE ---
     spacy_model: str = "nl_core_news_md"
 
     # --- Server ports ---

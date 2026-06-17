@@ -270,7 +270,7 @@ def _render_editor() -> None:
                 "Activeert de optionele derde detectielaag voor product-namen en "
                 "projectcodes via een lokaal Ollama-model (zie .env). Vereist een "
                 "draaiende Ollama-server; bij elke fout valt de pijplijn soft terug "
-                "op alleen regex + spaCy. Default uit."
+                "op alleen regex + DEDUCE. Default uit."
             ),
         )
 

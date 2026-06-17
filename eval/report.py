@@ -8,12 +8,14 @@ bewaard blijven voor vergelijking.
 from __future__ import annotations
 
 import csv
+import html
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from eval.evaluate import all_entity_types
+from eval.metrics.generalization import format_generalization_summary
 from shared.models import ENTITY_CATEGORY_MAP, EntityCategory, EntityType
 
 
@@ -169,10 +171,12 @@ def _performance_section(report: dict[str, Any]) -> str:
     direct_macro_f1 = perf.get("direct_identifier_macro_f1", 0)
     indirect_macro_f1 = perf.get("indirect_identifier_macro_f1", 0)
     mean_ms = perf.get("latency_mean_ms", latency.get("mean_ms", 0))
+    gen_summary = format_generalization_summary(report.get("generalization"))
     return (
         "<h2>Performance van de testrun</h2>"
         f"<p>Direct-identifier macro-F1: {_nl_num(direct_macro_f1)}<br>"
         f"Indirect-identifier macro-F1: {_nl_num(indirect_macro_f1)}<br>"
+        f"Generalisatie BR-B: {gen_summary}<br>"
         f"Latency mean: {_nl_num(mean_ms)}ms</p>"
     )
 
@@ -189,19 +193,13 @@ def format_run_summary(report: dict[str, Any]) -> str:
     direct_macro_f1 = perf.get("direct_identifier_macro_f1", 0)
     indirect_macro_f1 = perf.get("indirect_identifier_macro_f1", 0)
     mean_ms = perf.get("latency_mean_ms", report.get("latency", {}).get("mean_ms", 0))
-    gen = report.get("generalization", {})
-    gen_line = ""
-    if gen.get("checked"):
-        gen_line = (
-            f"\nGeneralisatie BR-B: {_nl_num(gen.get('ok', 0))}/"
-            f"{_nl_num(gen.get('checked', 0))} "
-            f"({_nl_num(round(float(gen.get('rate', 0)) * 100, 1))}%)"
-        )
+    gen_summary = format_generalization_summary(report.get("generalization"))
     performance = (
         "Performance van de testrun\n"
         f"Direct-identifier macro-F1: {_nl_num(direct_macro_f1)}\n"
         f"Indirect-identifier macro-F1: {_nl_num(indirect_macro_f1)}\n"
-        f"Latency mean: {_nl_num(mean_ms)}ms{gen_line}"
+        f"Generalisatie BR-B: {gen_summary}\n"
+        f"Latency mean: {_nl_num(mean_ms)}ms"
     )
     return f"{header}\n\n{performance}"
 
@@ -257,6 +255,49 @@ def _totals_row(
         f"<td>{label}</td><td></td>"
         f"<td>{_nl_num(p)}</td><td>{_nl_num(tp)}</td><td>{_nl_num(fp)}</td><td>{_nl_num(fn)}</td>"
         f"<td>{_nl_num(avg_p)}</td><td>{_nl_num(avg_r)}</td><td>{_nl_num(avg_f1)}</td></tr>"
+    )
+
+
+def _format_generalization_failure(item: dict[str, Any]) -> str:
+    """Mensleesbare failure-regel voor HTML/terminal."""
+    reason = item.get("reason", "?")
+    labels = {
+        "entity_not_detected": "entity niet gedetecteerd",
+        "wrong_entity_type": "verkeerd entity-type bij detectie",
+        "wrong_generalized_form": "verkeerde gegeneraliseerde vorm",
+    }
+    label = labels.get(reason, reason)
+    base = (
+        f"{item['record']}: {item['original']} → verwacht {item['expected']!r} — {label}"
+    )
+    if reason == "wrong_entity_type":
+        return (
+            f"{base} (gedetecteerd: {item.get('detected_type')}, "
+            f"verwacht type: {item.get('expected_type')})"
+        )
+    if reason == "wrong_generalized_form":
+        return f"{base} (werkelijk: {item.get('actual')!r})"
+    if reason == "entity_not_detected" and item.get("expected_type"):
+        return f"{base} (verwacht type: {item.get('expected_type')})"
+    return base
+
+
+def _generalization_section(report: dict[str, Any]) -> str:
+    """Detailblok generalisatie (BR-B01..B05) met mislukte checks."""
+    gen = report.get("generalization") or {}
+    summary = format_generalization_summary(gen)
+    failures = gen.get("failures") or []
+    if failures:
+        fail_rows = "".join(
+            f"<li>{html.escape(_format_generalization_failure(item))}</li>"
+            for item in failures
+        )
+    else:
+        fail_rows = "<li>geen mislukte checks</li>"
+    return (
+        f"<h2>Generalisatie (BR-B01..B05)</h2>"
+        f"<p>Score: {summary}</p>"
+        f"<ol>{fail_rows}</ol>"
     )
 
 
@@ -423,6 +464,7 @@ td,th{{border:1px solid #ccc;padding:.3rem .6rem;}}</style></head>
 <p>direct-identifiers geleakt: {_nl_num(leaks['direct_leaked'])} / {_nl_num(leaks['direct_total'])}
 (leak-rate {_nl_num(leaks['leak_rate'])})</p>
 <ol>{leak_rows}</ol>
+{_generalization_section(report)}
 <h2>Scores (overlap-matching)</h2>
 <p>micro-F1: {_nl_num(overlap_scores['micro']['f1'])} ·
 macro-F1: {_nl_num(overlap_scores['macro_f1'])}</p>

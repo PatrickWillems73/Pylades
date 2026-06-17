@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from eval.compare import _dig, write_comparison
+from eval.metrics.generalization import format_generalization_summary
 from eval.evaluate import describe_layers, evaluate
 from eval.runners.ner_backends import (
     DeduceBackend,
@@ -266,6 +267,13 @@ def test_deduce_backend_maps_and_filters_tags(monkeypatch: pytest.MonkeyPatch) -
 
 
 def _mini_report(runner: str, layer2: str, micro: float, leak: int) -> dict:
+    gen = {
+        "checked": 10,
+        "ok": 10 - leak,
+        "rate": (10 - leak) / 10,
+        "failures": [],
+    }
+    gen["summary"] = format_generalization_summary(gen)
     return {
         "runner": runner,
         "generated_at": "2026-06-11T17:00:00",
@@ -282,6 +290,7 @@ def _mini_report(runner: str, layer2: str, micro: float, leak: int) -> dict:
         },
         "leaks": {"direct_leaked": leak, "direct_total": 20, "leak_rate": leak / 20},
         "over_redaction": 0,
+        "generalization": gen,
         "latency": {"p50_ms": 12.0, "p95_ms": 34.0},
     }
 
@@ -311,6 +320,7 @@ def test_write_comparison_outputs_csv_and_html(tmp_path) -> None:
     )
 
     csv_text = paths["csv"].read_text(encoding="utf-8")
+    assert "generalisatie BR-B" in csv_text
     assert "pylades_deduce_runtime" in csv_text and "pylades_gliner" in csv_text
     assert csv_text.strip().count("\n") == 2  # header + 2 rijen
 
@@ -321,4 +331,5 @@ def test_write_comparison_outputs_csv_and_html(tmp_path) -> None:
     assert f'<a href="{runtime_html.name}">pylades_deduce_runtime</a>' in html
     assert f'<a href="{gliner_html.name}">pylades_gliner</a>' in html
     assert "Span-matching" in html
+    assert "generalisatie BR-B" in html
     assert "F1 (exact)" in html and "F1 (overlap)" in html

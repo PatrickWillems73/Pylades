@@ -9,7 +9,7 @@ voor iemand die de proxy lokaal draait en voor het eerst wil bekijken
 wat Pylades doet.
 
 > Voorwaarde: `uv sync --extra dev` is uitgevoerd, `ANTHROPIC_API_KEY`
-> staat in `.env`, en het spaCy-model `nl_core_news_md` is gedownload.
+> staat in `.env`, en DEDUCE is beschikbaar (standaard via `uv sync`).
 > Volg `README.md` § Installatie als dit nog niet klopt.
 
 ## 0. Start
@@ -27,7 +27,7 @@ uv run streamlit run ui/Home.py
 Open <http://localhost:8501> in een browser. Je landt
 direct op de testrun-pagina (Home). Controleer dat alle vier
 status-kaartjes op de **Status**-pagina (menu-optie 2) groen staan
-(proxy, Ollama-optioneel, spaCy, databases).
+(proxy, Ollama-optioneel, DEDUCE, databases).
 
 ---
 

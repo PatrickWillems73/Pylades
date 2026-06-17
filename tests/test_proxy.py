@@ -335,8 +335,8 @@ async def test_use_llm_flag_routes_to_detect_all_kwarg(
     """Template.use_llm=True → proxy roept detect_all(..., use_llm=True) aan.
 
     Bewijst dat de per-template-schakelaar voor laag 3 (Ollama) feitelijk
-    aankomt bij de detectie-orkestratie. De spaCy- en Ollama-detect-stubs
-    zelf worden buiten dit pad getest; we valideren hier alleen de bedrading.
+    aankomt bij de detectie-orkestratie. Laag-2/3-stubs worden buiten dit pad
+    getest; we valideren hier alleen de bedrading.
     """
     template_id_off = _make_template(use_llm=False)
     template_id_on = _make_template(use_llm=True)

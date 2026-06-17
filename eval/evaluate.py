@@ -24,7 +24,7 @@ from datetime import datetime
 from statistics import mean
 from typing import Any
 
-from eval.metrics.generalization import generalization_failures
+from eval.metrics.generalization import format_generalization_summary, generalization_failures
 from eval.metrics.scoring import (
     Counts,
     Leak,
@@ -264,8 +264,9 @@ def evaluate(
     warmup: bool = True,
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
-    # Cold-start-kosten (spaCy-load e.d.) eerst opvangen met een wegwerp-aanroep,
-    # zodat de gemeten latencies de steady-state per dossier weerspiegelen.
+    # Cold-start-kosten (DEDUCE-init, spaCy-load bij eval-runners, e.d.) eerst
+    # opvangen met een wegwerp-aanroep, zodat de gemeten latencies de
+    # steady-state per dossier weerspiegelen.
     warmup_ms: float | None = None
     total = len(records)
     if warmup:
@@ -276,7 +277,7 @@ def evaluate(
 
     per_type: dict[str, dict[EntityType, Counts]] = {m: defaultdict(Counts) for m in _MODES}
     confusion: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    # Per entity-type bijhouden welke detectielaag (regex/spacy/llm) de
+    # Per entity-type bijhouden welke detectielaag (regex/deduce/llm) de
     # voorspellingen leverde — informatief voor het rapport en modelkeuze.
     layer_counts: dict[EntityType, Counter[str]] = defaultdict(Counter)
     latencies: list[float] = []
@@ -343,7 +344,7 @@ def evaluate(
         "use_llm": bool(getattr(runner, "use_llm", False)),
         "spacy_model": getattr(runner, "spacy_model", None),
         # Expliciete laag-2-beschrijving van NER-vergelijkingsrunners (fase 3);
-        # None voor de spaCy-baseline, dan valt describe_layers terug op het model.
+        # None voor runtime-runners, dan valt describe_layers terug op DEDUCE.
         "layer2": getattr(runner, "layer2_desc", None),
         "llm_model": getattr(runner, "llm_model", None),
         # Werkelijke laag-3-status over de run: "ok" als laag 3 minstens één
@@ -358,6 +359,13 @@ def evaluate(
     generalization_rate = (
         generalization_ok / generalization_checked if generalization_checked else 1.0
     )
+    generalization_block = {
+        "checked": generalization_checked,
+        "ok": generalization_ok,
+        "rate": round(generalization_rate, 4),
+        "failures": generalization_failures_items,
+    }
+    generalization_block["summary"] = format_generalization_summary(generalization_block)
 
     return {
         "runner": runner.name,
@@ -403,12 +411,7 @@ def evaluate(
         },
         "exposure": exposure_block,
         "over_redaction": over_redaction,
-        "generalization": {
-            "checked": generalization_checked,
-            "ok": generalization_ok,
-            "rate": round(generalization_rate, 4),
-            "failures": generalization_failures_items,
-        },
+        "generalization": generalization_block,
         "latency": {
             "mean_ms": latency_mean_ms,
             "p50_ms": round(_percentile(latencies, 0.50), 2),

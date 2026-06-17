@@ -1,7 +1,7 @@
 """Pylades — Status-pagina.
 
 Vier status-kaartjes voor de afhankelijkheden (proxy, Ollama-optioneel,
-spaCy, databases) met per failend onderdeel een copy-pasteable shell-
+DEDUCE, databases) met per failend onderdeel een copy-pasteable shell-
 command. De daadwerkelijke checks leven in `ui/status.py` zodat ze
 testbaar zijn zonder Streamlit-context.
 

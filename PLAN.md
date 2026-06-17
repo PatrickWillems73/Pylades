@@ -425,7 +425,7 @@ schaden.
 
 ## 8. Detectiepijplijn — waarom drie cascading lagen
 
-Drie lagen in vaste volgorde: **regex → spaCy NL → Ollama**. Elke laag heeft
+Drie lagen in vaste volgorde: **regex → DEDUCE → Ollama (optioneel)**. Elke laag heeft
 een eigen *kost* (RAM, latency, gevoeligheid voor false positives) en eigen
 *scope*.
 
@@ -434,21 +434,22 @@ een eigen *kost* (RAM, latency, gevoeligheid voor false positives) en eigen
 1. Regex is goedkoop, deterministisch en heeft *zeer hoge precisie* voor
    structureel-formele entities (BSN met elfproef, IBAN met mod-97, PC6,
    kenteken, MRN, EPD-id). Eerst regex draaien laat de duurdere lagen minder
-   werk doen en garandeert dat een geldig BSN nooit door spaCy "gepromoveerd"
+   werk doen en garandeert dat een geldig BSN nooit door NER "gepromoveerd"
    wordt naar een free-text-naam.
-2. spaCy levert breder begrip (personen, organisaties, locaties) maar met
-   lagere precisie; we accepteren lagere thresholds en routeren laag-confidence
-   resultaten naar de review-queue. spaCy gebeurt *na* regex zodat het niet
-   per ongeluk een "Jan de Vries 123456782" als één persoon-entity ziet — de
-   regex heeft het BSN al uit het oppervlak verwijderd.
+2. DEDUCE levert NL-medische NER plus rol-heuristiek (`role_names`, `name_spans`)
+   maar met lagere precisie op generieke namen/locaties; we accepteren lagere
+   thresholds en routeren laag-confidence resultaten naar de review-queue.
+   DEDUCE gebeurt *na* regex zodat het niet per ongeluk een "Jan de Vries
+   123456782" als één persoon-entity ziet — de regex heeft het BSN al uit
+   het oppervlak verwijderd.
 3. Ollama is **default uit** omdat het ~1.4 GB extra RAM verbruikt en
    onstabiel kan zijn bij parallelle requests op een 8 GB-laptop. Wanneer aan,
-   richt het zich op jargon en productnamen die regex en spaCy missen.
+   richt het zich op jargon en productnamen die regex en DEDUCE missen.
 
-**Waarom alle drie als losse functies (`detect_regex`, `detect_spacy`,
-`detect_llm`) en pas in `detect_all()` gecomponeerd.** Test-isolatie. Een
-regex-faal mag niet wachten op spaCy's modelload (~5s); spaCy-tests mogen
-niet falen omdat Ollama niet draait. Door iedere laag los testbaar te maken,
+**Waarom losse laag-functies (`detect_regex`, `detect_deduce_with_status`,
+`detect_llm_with_status`) en pas in `detect_all()` gecomponeerd.** Test-isolatie.
+Een regex-faal mag niet wachten op DEDUCE-init; Ollama-tests mogen niet falen
+omdat DEDUCE niet beschikbaar is. Door iedere laag los testbaar te maken,
 zijn `tests/test_detection.py`-runs snel en hebben we vrijheid om in CI
 selectief lagen te skippen.
 
@@ -459,7 +460,7 @@ proxy-pad afhankelijk van een optionele subsysteem. We loggen een warning en
 retourneren een lege lijst.
 
 **Consequentie van verkeerd trekken.** Als we lagen sequentieel laten
-*verrijken* in plaats van *cascaderen* (bijvoorbeeld: spaCy mag regex-matches
+*verrijken* in plaats van *cascaderen* (bijvoorbeeld: laag 2 mag regex-matches
 overschrijven), verliezen we de hoge-precisie-garantie van laag 1. De rule
 is: latere lagen mogen *toevoegen*, niet *overschrijven*; overlap-resolutie
 in `detect_all()` kiest de eerdere laag bij conflict.
@@ -560,8 +561,8 @@ en de Anthropic-call gebeurt via `httpx.AsyncClient`. Dat is winst omdat één
 worker meerdere langlopende API-calls tegelijk aankan zonder thread-druk.
 
 **Sync waar het meer waard is.** Detectie, generalisering, pseudonimisering
-en alle DB-toegang zijn sync. spaCy heeft geen async-API en zou alsnog
-draaien in een threadpool; HMAC is CPU-werk dat niet profiteert van async;
+en alle DB-toegang zijn sync. DEDUCE draait sync; HMAC is CPU-werk dat niet
+profiteert van async;
 SQLite via `sqlite3` is sync. Sync code is leesbaarder en sneller te
 debuggen voor de bulk van de pijplijn.
 
@@ -583,7 +584,7 @@ volgt automatisch:
 1. **Configuratie-fout** (API-key ontbreekt, settings invalid). Fail-fast bij
    startup met een duidelijke message. Pydantic-settings doet dit gratis;
    we proberen niet "soft te degraderen".
-2. **Optionele subsysteem-fout** (Ollama down, spaCy-model ontbreekt). Soft-fail
+2. **Optionele subsysteem-fout** (Ollama down, DEDUCE-init faalt). Soft-fail
    met logged warning; vervolg met de overige lagen. De gebruiker hoort dit
    eenmaal te zien op de Streamlit-statuspagina.
 3. **Request-fout** (malformed body, entity onder threshold, provider niet
@@ -680,9 +681,9 @@ review-blocks kunnen produceren), Testruns vierde, Audit vijfde.
 
 ## 15. Risico-register — concrete risico's met mitigatie
 
-- **8 GB RAM-druk** bij gelijktijdig Ollama + spaCy + Streamlit + IDE →
-  laag 3 default uit; spaCy lazy-geladen op eerste call; documentatie raadt
-  Ollama tijdelijk stoppen aan tijdens zware sessies.
+- **8 GB RAM-druk** bij gelijktijdig Ollama + DEDUCE + Streamlit + IDE →
+  laag 3 default uit; documentatie raadt Ollama tijdelijk stoppen aan tijdens
+  zware sessies. spaCy zit alleen in `--extra eval` (modelvergelijking).
 - **Pseudoniem-collisions in 6 hex chars** (~16.7M ruimte per sessie) →
   binnen één sessie verwaarloosbaar; de `UNIQUE(session_id, pseudonym)`
   constraint detecteert het hoe-dan-ook bij INSERT en logt de fout.
@@ -1024,12 +1025,11 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
 ### Proxy-pijplijn
 
 - [x] **Stap 5 — Detectie.**
-  [proxy/detection.py](proxy/detection.py) (regex + spaCy lazy + Ollama
+  [proxy/detection.py](proxy/detection.py) (regex + DEDUCE + Ollama
   soft-fail + threshold-routing) + [tests/test_detection.py](tests/test_detection.py).
   *Klaar:* 12 regex-patronen + 3 context-date-patronen (ADMISSION/DISCHARGE/
-  EXAM); BSN-elfproef en IBAN-mod-97 wijzen ongeldige matches af; spaCy
-  lazy-loaded met soft-fail (`nl_core_news_md` mapt OntoNotes-labels zoals
-  `PERSON`→`NAME`, `GPE`→`LOCATION` naast legacy `PER`/`ORG`/`MISC`);
+  EXAM); BSN-elfproef en IBAN-mod-97 wijzen ongeldige matches af; DEDUCE
+  als enige runtime laag 2 (`proxy/deduce_layer.py`, soft-fail bij init);
   Ollama achter `use_llm=True` met brede exception-vangst; `Thresholds`
   routeren naar `confident_entities` of `pending_review`; regex wint bij
   cross-layer-overlap.
@@ -1089,7 +1089,7 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   [ui/Home.py](ui/Home.py) + [ui/status.py](ui/status.py) +
   [tests/test_ui_status.py](tests/test_ui_status.py).
   *Klaar:* vier `StatusCheck`-cards (Proxy via `/healthz`, Ollama via
-  `/api/tags` + model-check, spaCy via `spacy.util.is_package`, beide
+  `/api/tags` + model-check, DEDUCE via `deduce_available()`, beide
   DBs via `sqlite3.connect`); rode card toont `fix_hint` + bash-command
   in `st.code(...)`; `ui/status.py` is testbaar zonder Streamlit-runtime.
   Gedeelde UI-shell: [ui/ui_extras.py](ui/ui_extras.py), [ui/theme.py](ui/theme.py),

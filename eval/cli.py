@@ -23,6 +23,7 @@ from eval.evaluate import evaluate
 from eval.generators.bootstrap import main as bootstrap_main
 from eval.generators.synthetic import generate_dataset
 from eval.manifest import resolve_manifest, verify_checksum, write_manifest
+from eval.metrics.generalization import format_generalization_summary
 from eval.report import format_run_summary, write_all
 from eval.runners.base import Runner
 from eval.runners.mlx_backend import MLXLayer3Backend
@@ -86,7 +87,7 @@ def _runner_catalog() -> dict[str, tuple[str, Callable[[], Runner]]]:
             lambda: NerPipelineRunner(name="pylades_gliner", backend=GlinerBackend()),
         ),
         "pylades_deduce": (
-            "regex + DEDUCE 3.x (laag 2; eval-extra)",
+            "regex + DEDUCE 3.x (laag 2; NerPipeline-vergelijking)",
             lambda: NerPipelineRunner(name="pylades_deduce", backend=DeduceBackend()),
         ),
     }
@@ -108,7 +109,7 @@ def _format_runners_list() -> str:
 def _emit_run_progress(current: int, total: int, label: str) -> None:
     """Toon voortgang op stderr (warm-up + per record)."""
     if label == "warm-up":
-        msg = "Voortgang: warm-up (spaCy/LLM laden)…"
+        msg = "Voortgang: warm-up (DEDUCE/LLM laden)…"
     else:
         msg = f"Voortgang: {current}/{total} · {label}…"
     if sys.stderr.isatty():
@@ -324,8 +325,14 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     paths = write_comparison(reports, out_dir, runner_html=runner_html)
     if not args.no_open:
         webbrowser.open_new(paths["html"].resolve().as_uri())
+    gen_lines = "\n".join(
+        f"  {r['runner']}: generalisatie BR-B "
+        f"{format_generalization_summary(r.get('generalization'))}"
+        for r in reports
+    )
     print(  # noqa: T201
         f"\nVergeleken: {', '.join(r['runner'] for r in reports)}\n"
+        f"{gen_lines}\n"
         f"Vergelijkingsrapport: {paths['html']}\n{paths['csv']}"
     )
     return 0

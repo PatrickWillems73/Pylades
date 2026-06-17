@@ -5,8 +5,8 @@ Drie groepen:
 2. Cross-cutting: overlap-resolutie, context-date-overrides, threshold-routing.
 3. End-to-end op de 8 NL-fixtures.
 
-spaCy- en Ollama-tests skippen wanneer hun model/server niet beschikbaar
-is, zodat de suite in een minimal-CI-omgeving toch groen kan zijn.
+spaCy- (eval-runner) en Ollama-tests skippen wanneer hun model/server niet
+beschikbaar is, zodat de suite in een minimal-CI-omgeving toch groen kan zijn.
 DEDUCE is een hoofddependency; de laag-2-tests skippen als import/init faalt.
 """
 
@@ -244,6 +244,63 @@ class TestContextDates:
         exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
         assert len(exams) == 1
         assert exams[0].original == "10-05-2024"
+
+    def test_exam_context_foto_op(self) -> None:
+        result = detect_regex("Thoraxfoto op 28-05-2019: tekenen van pulmonale stuwing.")
+        exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+        assert len(exams) == 1
+        assert exams[0].original == "28-05-2019"
+        assert EntityType.BIRTHDATE not in _types_in(result)
+
+    def test_exam_context_gepland_op(self) -> None:
+        result = detect_regex("Echocardiografie gepland op 24-06-2024: beoordeling LVEF.")
+        exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+        assert len(exams) == 1
+        assert exams[0].original == "24-06-2024"
+
+    def test_exam_context_expanded_keywords(self) -> None:
+        cases = (
+            ("Gastroscopie op 01-04-2025", "01-04-2025"),
+            ("X-thorax op 02-08-2024", "02-08-2024"),
+            ("Rust-ECG op 17-06-2025", "17-06-2025"),
+            ("Laboratoriumuitslagen (afgenomen op 01-05-2022", "01-05-2022"),
+        )
+        for text, expected_date in cases:
+            result = detect_regex(text)
+            exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+            assert len(exams) == 1, text
+            assert exams[0].original == expected_date
+            assert EntityType.BIRTHDATE not in _types_in(result)
+
+    def test_exam_document_header_date(self) -> None:
+        result = detect_regex("POLIKLINIEK\n\nDatum consult: 26-10-2025\nLocatie: Rotterdam")
+        exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+        assert len(exams) == 1
+        assert exams[0].original == "26-10-2025"
+
+    def test_discharge_verwacht_ontslag_opname_phrasing(self) -> None:
+        text = "Verwachte ontslagdatum na huidige opname op 20-07-2025."
+        result = detect_regex(text)
+        discharges = [e for e in result if e.entity_type is EntityType.DISCHARGE_DATE]
+        assert len(discharges) == 1
+        assert discharges[0].original == "20-07-2025"
+        assert EntityType.ADMISSION_DATE not in _types_in(result)
+
+    def test_admission_op_de_afdeling_op(self) -> None:
+        result = detect_regex(
+            "Hierbij bericht ik over opname op de afdeling Interne Geneeskunde op 03-02-2020."
+        )
+        admissions = [e for e in result if e.entity_type is EntityType.ADMISSION_DATE]
+        assert len(admissions) == 1
+        assert admissions[0].original == "03-02-2020"
+
+    def test_admission_discharge_range(self) -> None:
+        text = "Patiënt opgenomen was op onze afdeling van 25-11-2019 tot 27-01-2025."
+        result = detect_regex(text)
+        admissions = [e for e in result if e.entity_type is EntityType.ADMISSION_DATE]
+        discharges = [e for e in result if e.entity_type is EntityType.DISCHARGE_DATE]
+        assert [e.original for e in admissions] == ["25-11-2019"]
+        assert [e.original for e in discharges] == ["27-01-2025"]
 
     def test_two_dates_one_admission_one_birthdate(self) -> None:
         text = "Geboren op 03-04-1972, opgenomen op 15-03-2024."

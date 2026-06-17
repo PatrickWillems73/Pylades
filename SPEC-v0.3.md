@@ -80,7 +80,7 @@ niet tegen diefstal van de audit-database zelf. In v1.0 wordt
 **In scope:**
 - Persoonlijke tool op één machine (M1 MacBook Pro **8 GB**, macOS)
 - Eén Anthropic API-key in `.env`
-- Drie detectielagen: regex, spaCy NL (`nl_core_news_md`), lokaal LLM via Ollama
+- Drie detectielagen: regex, DEDUCE 3.x (NL-medisch NER), lokaal LLM via Ollama
   (`qwen3:1.7b`) — laag 3 **standaard uit**, optioneel aan
 - Pseudoniem-generatie via HMAC-SHA-256 (BR-C01)
 - Vijf UI-pagina's: Templates, Testruns, Review Queue, Audit, Config
@@ -113,16 +113,17 @@ niet tegen diefstal van de audit-database zelf. In v1.0 wordt
 | ASGI server | `uvicorn[standard]` | Standaard voor FastAPI |
 | HTTP client | `httpx` >= 0.27 | Async, modern |
 | UI framework | `streamlit` >= 1.40 | Pure Python, snelste tijd-tot-werkend |
-| NER (laag 2) | `spacy` >= 3.8 + `nl_core_news_md` | Lichter dan `_lg`; past in 8 GB RAM |
+| NER (laag 2) | `deduce` >= 3.0 | NL-medische NER; geen aparte modeldownload |
+| Eval-vergelijking laag 2 | `spacy` + `nl_core_news_lg` (optioneel `--extra eval`) | Benchmark-only |
 | Lokaal LLM (laag 3) | `ollama` Python library | `qwen3:1.7b` (1.4 GB); werkbaar op M1 8 GB |
 | Database | `sqlite3` (stdlib) | v0.3-eenvoud; twee separate files voor BR-G02 |
 | Settings | `pydantic-settings` v2 | Type-safe `.env`-loading; één bron voor config |
 | Crypto | `hmac`, `hashlib`, `secrets` (stdlib) | HMAC-SHA-256 voor pseudoniemen (BR-C01) |
 
 **Externe afhankelijkheden die de gebruiker zelf installeert:**
-- `ollama serve` draaiend op `localhost:11434`
+- `ollama serve` draaiend op `localhost:11434` (alleen bij actieve laag 3)
 - Model `qwen3:1.7b` gepulld via `ollama pull` (~1.4 GB)
-- `python -m spacy download nl_core_news_md` éénmalig (~50 MB)
+- DEDUCE wordt meegeïnstalleerd via `uv sync`; geen aparte download
 
 ---
 
@@ -190,7 +191,7 @@ pylades/
    ├─► Stage 1: DETECT (BR-A01, A02, A04)
    │     Regex laag    → BSN+elfproef, IBAN, PC6, telefoon, e-mail, MRN,
    │     │              EPD-id, kenteken, geboortedatum, projectcode
-   │     spaCy NL laag → personen, organisaties, locaties
+   │     DEDUCE laag     → NL-medische entiteiten, namen, locaties, orgs
    │     Qwen3 laag    → jargon, productnamen (standaard uit)
    │     ↓
    │     Classificatie: DIRECT_IDENTIFIER | QUASI_IDENTIFIER |
@@ -792,10 +793,10 @@ Twee context managers `get_content_connection()` en `get_vault_connection()`.
 ### `proxy/detection.py`
 Functies:
 - `detect_regex(text) -> list[Entity]`
-- `detect_spacy(text) -> list[Entity]`
-- `detect_llm(text) -> list[Entity]` — **faal soft**: bij Ollama-error, JSON-
-  parse-error, of timeout: log warning, return lege lijst. Andere lagen
-  hebben hun werk al gedaan; laag 3 is best-effort.
+- `detect_deduce_with_status(text) -> tuple[list[Entity], LayerStatus]`
+- `detect_llm_with_status(text, ...) -> tuple[list[Entity], LayerStatus]` — **faal soft**:
+  bij Ollama-error, JSON-parse-error, of timeout: log warning, return lege lijst.
+  Andere lagen hebben hun werk al gedaan; laag 3 is best-effort.
 
 Orkestrator:
 - `detect_all(text, use_llm=False) -> DetectionResult`
@@ -892,7 +893,7 @@ Anthropic-only in v0.3: bij `llm_provider != "anthropic"` in template
 return HTTP 501 `Not Implemented` met verwijzing naar v1.0.
 
 ### `ui/Home.py`
-Streamlit hoofdpagina met status-checks (proxy, ollama, spaCy, beide DBs)
+Streamlit hoofdpagina met status-checks (proxy, ollama, DEDUCE, beide DBs)
 en welkomstuitleg. Bij elk failing onderdeel: install-command tonen in
 `st.code(...)`.
 

@@ -57,7 +57,7 @@ FIXTURES: Final[tuple[Fixture, ...]] = (
         ),
         notes=(
             "Regex: BSN (passeert elfproef), POSTCODE_PC6, BIRTHDATE. "
-            "spaCy: NAME ('Pietersen'), LOCATION ('Deventer'). "
+            "DEDUCE: NAME ('Pietersen'), LOCATION ('Deventer'). "
             "Generalisering: BIRTHDATE -> BIRTH_YEAR (1972); PC6 -> PC2 (74)."
         ),
     ),
@@ -108,7 +108,7 @@ FIXTURES: Final[tuple[Fixture, ...]] = (
         ),
         notes=(
             "Generalisering: AGE 89 -> blijft '89 jaar'; AGE 95 -> '90+ jaar'. "
-            "spaCy detecteert 'Janssen' en 'De Boer' als NAME (laag-confidence "
+            "DEDUCE detecteert 'Janssen' en 'De Boer' als NAME (laag-confidence "
             "mogelijk voor 'De Boer' -> review-queue-kandidaat afhankelijk van threshold)."
         ),
     ),
@@ -132,7 +132,7 @@ FIXTURES: Final[tuple[Fixture, ...]] = (
             "Ziekenhuis in Eindhoven (5623EJ) over een gezamenlijk traject."
         ),
         notes=(
-            "spaCy: ORG ('OLVG', 'Catharina Ziekenhuis'), LOCATION ('Amsterdam', "
+            "DEDUCE: ORG ('OLVG', 'Catharina Ziekenhuis'), LOCATION ('Amsterdam', "
             "'Eindhoven'). Regex: POSTCODE_PC6 -> generalisering levert '10' en '56'."
         ),
     ),
@@ -145,7 +145,7 @@ FIXTURES: Final[tuple[Fixture, ...]] = (
         ),
         notes=(
             "Regex: ICD10_CODE (E70.0, zeldzaam -> review). "
-            "spaCy: LOCATION ('Heerlen'). "
+            "DEDUCE: LOCATION ('Heerlen'). "
             "Mix laat zien dat CLINICAL_SENSITIVE naast QUASI_IDENTIFIER kan staan."
         ),
     ),

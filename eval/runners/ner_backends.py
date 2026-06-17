@@ -108,7 +108,7 @@ class SpacyNerBackend:
             return
         try:
             import spacy  # noqa: PLC0415
-        except ImportError as exc:  # pragma: no cover - spaCy is runtime-dep
+        except ImportError as exc:  # pragma: no cover - spaCy is eval-extra
             raise NerBackendError(f"spaCy ontbreekt: {exc}") from exc
         try:
             self._nlp = spacy.load(self.model_name)

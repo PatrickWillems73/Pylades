@@ -30,6 +30,7 @@ _COLUMNS: list[tuple[tuple[str, ...], str]] = [
     (("leaks", "direct_leaked"), "direct geleakt"),
     (("leaks", "direct_total"), "direct totaal"),
     (("leaks", "leak_rate"), "leak-rate"),
+    (("generalization", "summary"), "generalisatie BR-B"),
     (("over_redaction",), "over-redactie"),
     (("latency", "p50_ms"), "p50 (ms)"),
     (("latency", "p95_ms"), "p95 (ms)"),
@@ -122,6 +123,9 @@ over álle types, daarna F1; hoog-volume types wegen zwaarder.<br>
 gold), daarna ongewogen gemiddeld; alleen overlap wordt hier getoond (exact
 staat in het per-runner JSON).<br>
 <strong>direct geleakt</strong> is de primaire privacy-KPI (harde gate: 0).
+<strong>generalisatie BR-B</strong> = aandeel geslaagde BR-B01..B05-checks t.o.v.
+<code>expected_generalization</code> in de dataset (<code>ok/checked</code> en
+percentage; bij geen checks in de dataset: <code>0/0 (n.v.t.)</code>).
 Lagere latency is beter; modellen zijn één-voor-één gemeten (M1
 8&nbsp;GB-constraint).</p>
 <h2>Per-runner-rapporten</h2><ul>{runner_links}</ul>

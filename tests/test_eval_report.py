@@ -92,6 +92,7 @@ def test_html_has_groups_subtotals_and_ordered_leaklist(tmp_path: Path) -> None:
     assert "Performance van de testrun" in html
     assert "Direct-identifier macro-F1" in html
     assert "Indirect-identifier macro-F1" in html
+    assert "Generalisatie (BR-B01..B05)" in html
 
 
 def test_format_run_summary_includes_performance_block() -> None:
@@ -104,6 +105,7 @@ def test_format_run_summary_includes_performance_block() -> None:
     assert "Direct-identifier macro-F1:" in summary
     assert "Indirect-identifier macro-F1:" in summary
     assert "Latency mean:" in summary
+    assert "Generalisatie BR-B:" in summary
 
 
 def test_totals_row_sums_counts_and_averages_gold_rows_only() -> None:

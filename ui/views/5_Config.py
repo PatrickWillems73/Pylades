@@ -36,9 +36,9 @@ st.title("Configuratie")
 
 _THRESHOLD_KEYS: tuple[tuple[str, str, float], ...] = (
     ("threshold_regex", "Regex-laag (default 1.0)", 1.0),
-    ("threshold_spacy_person", "spaCy PER (default 0.85)", 0.85),
-    ("threshold_spacy_org", "spaCy ORG (default 0.80)", 0.80),
-    ("threshold_spacy_location", "spaCy LOC (default 0.85)", 0.85),
+    ("threshold_spacy_person", "Laag 2 NAME (default 0.85)", 0.85),
+    ("threshold_spacy_org", "Laag 2 ORG (default 0.80)", 0.80),
+    ("threshold_spacy_location", "Laag 2 LOC (default 0.85)", 0.85),
     ("threshold_llm", "LLM (Ollama, default 0.70)", 0.70),
 )
 

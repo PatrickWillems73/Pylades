@@ -72,9 +72,10 @@ De pytest-gate zelf: formeel normal-subset; uitbreiding deduce/150 — §12.
   one-way-gepseudonimiseerd óf gegeneraliseerd wordt (jaar, PC2) — en is dus géén
   lek; ook een span die met een *ander* type wordt gemaskeerd telt als gedekt (de
   type-fout zelf zit in de PRF/verwarringsmatrix, niet in de lek-KPI).
-- **spaCy-confidence is een vaste constante per label** (`_SPACY_LABEL_CONFIDENCE`
-  in [proxy/detection.py](proxy/detection.py)); kalibratie-analyse geldt alleen
-  voor modellen met echte scores (GLiNER/Presidio).
+- **Laag-2-confidence (DEDUCE/spaCy-eval)** gebruikt vaste drempels per type
+  (`Thresholds` in [proxy/detection.py](proxy/detection.py), env-keys
+  `threshold_spacy_*`); kalibratie-analyse geldt alleen voor modellen met
+  echte scores (GLiNER/Presidio).
 - **Bekende detector-gaten meten.** `DIAGNOSIS` (vrije-tekstdiagnose) heeft
   **geen detector**; het harnas rapporteert blootstelling als structurele
   false-negative. `ADDRESS` heeft sinds v0.3 een **beperkte regex-laag**
@@ -110,7 +111,7 @@ De pytest-gate zelf: formeel normal-subset; uitbreiding deduce/150 — §12.
    afwijkingen. *(Stap 4 nog niet geautomatiseerd; zie §13.)*
 
 **Adversariële subset:** 9-cijferig niet-BSN, naam-lijkt-org en omgekeerd, datum
-zonder contextwoord, near-threshold spaCy-namen, zeldzame vs veelvoorkomende
+zonder contextwoord, near-threshold laag-2-namen, zeldzame vs veelvoorkomende
 ICD-10, buitenlandse namen, typo's/OCR-ruis, hoge entity-dichtheid.
 
 **Privacy:** 100% fictief; alle BSN's elfproef-geldig maar niet-bestaand;
@@ -148,7 +149,8 @@ en `dataset-10dossiers.jsonl` niet door elkaar lopen. De dataset wordt **gepind*
   `evaluate()` vergeleken met `generalize_all()` op de voorspellingen; zie
   `eval/metrics/generalization.py`.
 - Per model: **latency** p50/p95 op M1 8 GB. De eerste runner-aanroep betaalt
-  eenmalige **cold-start**-kosten (lazy spaCy-load, ~1-2 s). `evaluate()` draait
+  eenmalige **cold-start**-kosten (DEDUCE-init, spaCy-load bij `pylades_lg`, e.d.).
+  `evaluate()` draait
   standaard eerst één **warm-up-aanroep**; die latency wordt weggegooid maar
   apart vermeld (`latency.warmup_ms`). `--no-warmup` meet de cold-start wél mee.
 - **Piek-RAM** tijdens inferentie: nog te meten (nu alleen statische `memory_gb`
@@ -159,10 +161,10 @@ en `dataset-10dossiers.jsonl` niet door elkaar lopen. De dataset wordt **gepind*
 
 | Model | Type | Voordelen | Nadelen |
 | --- | --- | --- | --- |
-| spaCy `nl_core_news_md` (baseline) | CNN | licht, geïntegreerd | generieke labels; geen echte confidence |
-| spaCy `nl_core_news_lg` | CNN | betere dekking, CPU/snel, drop-in | generieke labels |
+| DEDUCE 3.0 (`vmenger/deduce`) — **runtime baseline** | rule-based NL-medisch | transparant/auditeerbaar, NL-zorgcontext; geïntegreerd via `uv sync` | mist nieuwe patronen; overlapt regex-laag |
+| spaCy `nl_core_news_lg` (eval-runner `pylades_lg`) | CNN | betere dekking generieke NER, CPU/snel | generieke labels; geen echte confidence |
+| spaCy `nl_core_news_md` (eval-only) | CNN | licht | generieke labels; geen echte confidence |
 | GLiNER2-PII (multilingual) | zero-shot transformer | SOTA span-F1 op PII, 42 types incl. NL, configureerbaar, echte confidences, CoreML; **vult de transformer-rol** | lagere precisie OOD (overpredictie namen); zwaar (RAM) |
-| DEDUCE 3.0 (`vmenger/deduce`) | rule-based NL-medisch | transparant/auditeerbaar, NL-zorgcontext | mist nieuwe patronen; overlapt regex-laag |
 
 **Geen `nl_core_news_trf`.** Explosion publiceert voor Nederlands alleen
 `sm`/`md`/`lg` ([spacy.io/models/nl](https://spacy.io/models/nl)); er is geen
@@ -259,7 +261,7 @@ Runners: `pylades_deduce_runtime` (regex+DEDUCE), `pylades_md_llm` (+ laag 3 via
 eval/
   datasets/      versie-gepinde JSONL + manifest (checksum, seed, generator-versie)
   generators/    datageneratie + adversarial + offline bootstrap
-  runners/       model-adapters (regex+spaCy md/lg, GLiNER, DEDUCE; laag-3-backends)
+  runners/       model-adapters (regex+DEDUCE runtime, spaCy lg, GLiNER, DEDUCE NerPipeline; laag-3-backends)
   metrics/       scoring (span/type PRF, leak-rate, kalibratie, latency)
   judge/         oracle/judge (later)
   triage/        failure-clustering + bugrapport-concepten (later)
@@ -277,11 +279,11 @@ tests/
 ```
 
 - Eval-only dependencies als optionele groep `eval` in
-  [pyproject.toml](pyproject.toml); runtime blijft `nl_core_news_md` ongewijzigd.
+  [pyproject.toml](pyproject.toml); runtime laag 2 is DEDUCE (`deduce>=3.0.0`).
 - CI: `.github/workflows/eval-gates.yml` draait pytest op gates, scoring,
   generalisatie en detectie-unit-tests.
 - Reproduceerbaarheid: model-versies en dataset-checksum gepind; seeds vast;
-  omgeving (python/spaCy/model-versies) in elk rapport.
+  omgeving (python/DEDUCE/eval-model-versies) in elk rapport.
 
 ## 10. FG/DPO-deliverable
 
@@ -289,8 +291,8 @@ tests/
 - Reproduceerbaar **lekkage-bewijs** (dataset-checksum + git-SHA).
 - **Restrisico-register** met v0.3-beperkingen: plaintext
   `audit_log.original_prompt`, geen medisch NER, `DIAGNOSIS` zonder detector,
-  beperkte `ADDRESS`-regex (niet alle adresvormen), spaCy zonder
-  per-entity-probabilities.
+  beperkte `ADDRESS`-regex (niet alle adresvormen), laag 2 zonder
+  per-entity-probabilities (DEDUCE/spaCy-eval).
 - **DPIA-input** als bijlage; volledige DPIA blijft FG-proces.
 
 ## 11. Fasering

@@ -58,30 +58,167 @@ class LayerTiming:
 # Worden in een aparte pre-pass behandeld zodat ze hun datum-span claimen
 # voordat het algemene BIRTHDATE-patroon eraan kan komen (BR-B04 vereist
 # dat een opname-datum onderscheidbaar blijft van een geboortedatum).
+# Volgorde telt: specifieke ontslag-patronen vóór generieke opname-patronen.
 _DATE_BODY = r"\d{1,2}[-/]\d{1,2}[-/]\d{4}"
 
+# --- Ontslag (DISCHARGE_DATE) — vóór opname, want "verwacht ontslag … opname op …"
+_DISCHARGE_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
+    re.compile(
+        rf"(?:^|\n)\s*ontslagbrief[^\n]*\n\s*datum\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        rf"(?:verwachte?\s+ontslag(?:datum)?(?:[^\n]{{0,55}}?))(?:[:]\s*|op\s+|rond\s+)({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:ontslag(?:datum)?(?:[^\n]{{0,55}}?))(?:gepland\s+)?rond\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:te\s+ontslaan|ontslagen\s+(?:worden|kunnen\s+worden)|met\s+ontslag\s+naar\s+huis)"
+        rf"\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:ontslag\s+(?:naar\s+huis\s+)?(?:voorzien|verwacht)|ontslag\s+verwacht)\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:van\s+{_DATE_BODY}\s+(?:tot|t/m)\s+)({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:ontslag\s+gepland\s+op|ontslagen\s+op|ontslag(?:datum)?\D{{0,12}})({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+)
+
+# --- Opname (ADMISSION_DATE)
+_ADMISSION_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
+    re.compile(
+        rf"(?:^|\n)\s*opnamebrief[^\n]*\n\s*datum\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        rf"(?:opgenomen\s+was(?:[^\n]{{0,60}}?)?van\s+)({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:opgenomen|opnamedatum|opnemingsdatum)(?:[^\n]{{0,40}}?)"
+        rf"(?:op\s+|:\s*)({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:eerdere\s+opname|geplande\s+opname|verband\s+met\s+opname)\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"geplande\s+opname\s+voor\s+operatie\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"opname\s+dagbehandeling\s+(?:voorzien\s+)?op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:consult(?:[^\n]{{0,40}}?))vond\s+plaats\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:op\s+de\s+afdeling(?:[^\n]{{0,50}}?))op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+)
+
+# --- Onderzoek (EXAM_DATE)
+_EXAM_KEYWORDS = (
+    r"onderzoek|onderzoeksdatum|scan|mri|ct|pet|echo|echocardiografie|"
+    r"thoraxfoto|röntgenfoto|x-thorax|ct-thorax|ecg|laboratorium|lab|"
+    r"gastroscopie|coloscopie|colonoscopie|endoscopie|angiografie|biopsie|"
+    r"ecografie|ultrasoon|sonografie|mammografie|scopie|(?:\w+)?foto"
+)
+_EXAM_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
+    re.compile(
+        rf"bloedafname\s+vond\s+plaats\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:verricht|onderging|besproken\s+met[^\n]{{0,60}}?)"
+        rf"\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:geautoriseerd\s+door[^\n]{{0,60}}?)\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"datum\s+consult\s*:\s*gezien\s+op(?:\s+(?:de\s+)?poli(?:kliniek)?)?\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"datum\s+consult\s*:\s*gezien\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"datum\s+controleafspraak\s*:\s*gezien\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"beloop\s+tijdens\s+opname\s*:\s*op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:verslagdatum|datum\s+overleg|datum\s+verwijzing|datum\s+controleafspraak)"
+        rf"\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|\n)\s*[A-Za-z][\w\s-]{{2,40}},\s*({_DATE_BODY})",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        rf"(?:^|\n)\s*datum\s+(?:consult|verslag|brief|mdo|overleg)\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        rf"(?:^|\n)\s*datum\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        rf"(?:afgenomen|verricht|uitgevoerd)\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:poliafspraak\s+op|poliafspraak|mdo\s+van|besproken\s+tijdens\s+mdo\s+van)\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:{_EXAM_KEYWORDS})(?:[^\n]{{0,30}})?\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:{_EXAM_KEYWORDS})\D{{0,20}}({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+)
+
+_EXAM_DATE_PATTERNS_BEFORE_ADMISSION: Final[tuple[re.Pattern[str], ...]] = (
+    _EXAM_DATE_PATTERNS[0],
+    _EXAM_DATE_PATTERNS[1],
+    _EXAM_DATE_PATTERNS[2],
+    _EXAM_DATE_PATTERNS[3],
+    _EXAM_DATE_PATTERNS[4],
+    _EXAM_DATE_PATTERNS[5],
+    _EXAM_DATE_PATTERNS[6],
+)
+_EXAM_DATE_PATTERNS_AFTER_ADMISSION: Final[tuple[re.Pattern[str], ...]] = _EXAM_DATE_PATTERNS[7:]
+
 CONTEXT_DATE_PATTERNS: Final[list[tuple[EntityType, re.Pattern[str]]]] = [
-    (
-        EntityType.ADMISSION_DATE,
-        re.compile(
-            rf"(?:opname|opgenomen|opnamedatum|opnemingsdatum)\D{{0,20}}({_DATE_BODY})",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        EntityType.DISCHARGE_DATE,
-        re.compile(
-            rf"(?:ontslag|ontslagdatum|ontslagen)\D{{0,20}}({_DATE_BODY})",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        EntityType.EXAM_DATE,
-        re.compile(
-            rf"(?:onderzoek|onderzoeksdatum|scan|mri|ct)\D{{0,20}}({_DATE_BODY})",
-            re.IGNORECASE,
-        ),
-    ),
+    *((EntityType.DISCHARGE_DATE, pattern) for pattern in _DISCHARGE_DATE_PATTERNS),
+    *((EntityType.EXAM_DATE, pattern) for pattern in _EXAM_DATE_PATTERNS_BEFORE_ADMISSION),
+    *((EntityType.ADMISSION_DATE, pattern) for pattern in _ADMISSION_DATE_PATTERNS),
+    *((EntityType.EXAM_DATE, pattern) for pattern in _EXAM_DATE_PATTERNS_AFTER_ADMISSION),
 ]
 
 
@@ -188,9 +325,10 @@ _SPACY_LABEL_TO_TYPE: Final[dict[str, EntityType]] = {
 # Vaste pseudo-confidence per label. spaCy NER geeft geen native per-entity
 # probability terug; om de threshold-routing toch werkend te krijgen kennen
 # we per label een constante toe die net boven de default-threshold ligt.
-# Operationele consequentie: de review-queue voor spaCy is een handmatige
-# knop (operator zet threshold > constante), geen probabilistische trigger.
-# Voor echte per-entity probabilities zie v1.0 met spacy-transformers.
+# Operationele consequentie: de review-queue voor laag-2-entities zonder native
+# confidence is een handmatige drempel (operator zet threshold > constante),
+# geen probabilistische trigger. Eval spaCy-backend gebruikt deze constanten;
+# runtime DEDUCE gebruikt `Thresholds` op entity-type.
 _SPACY_LABEL_CONFIDENCE: Final[dict[str, float]] = {
     "PER": 0.90,
     "PERSON": 0.90,
@@ -208,7 +346,7 @@ _SPACY_LABEL_CONFIDENCE: Final[dict[str, float]] = {
 
 @dataclass(frozen=True)
 class Thresholds:
-    """Confidence-grenzen per laag (en per spaCy-label).
+    """Confidence-grenzen per laag (laag 2: NAME/ORG/LOCATION via legacy env-keys).
 
     Defaults matchen het prompt; `from_db()` overschrijft met waardes uit
     de `config`-tabel als die gezet zijn. Tests construeren bewust een
@@ -623,7 +761,8 @@ def _merge_cross_layer(
 ) -> list[Entity]:
     """Behoud entiteiten in volgorde van layer-prioriteit; drop overlappers.
 
-    Eerste laag (REGEX) wordt integraal opgenomen; spaCy en LLM kunnen
+    Eerste laag (REGEX) wordt integraal opgenomen; laag 2 (DEDUCE) en laag 3 (LLM)
+    kunnen
     toevoegen waar regex niets vond, maar nooit een regex-detectie
     overschrijven (PLAN.md §8: "later layers add, not overwrite").
     """

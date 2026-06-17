@@ -71,7 +71,7 @@ class StatusCard:
 STATUS_CARDS: tuple[StatusCard, ...] = (
     StatusCard("Proxy", True, "FastAPI op :8080 — /healthz returnt ok"),
     StatusCard("Ollama", False, "Niet bereikbaar (optioneel)"),
-    StatusCard("spaCy NL", True, "nl_core_news_md geladen"),
+    StatusCard("DEDUCE", True, "NL-medische laag 2 OK"),
     StatusCard("Databases", True, "content + vault geïnitialiseerd"),
 )
 
