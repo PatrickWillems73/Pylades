@@ -10,6 +10,7 @@ alwaysApply: true
 - **Huidige release:** `shared/version.py` → `__version__` (nu semver `0.3.0`, weergave `v0.3.0`).
 - **Doelversie (spec/milestone):** `TARGET_VERSION = "0.3.0"` → docs `v0.3`; pas aan bij volgende milestone.
 - **Sync:** `pyproject.toml` `[project].version` moet gelijk zijn aan `__version__` (`tests/test_version.py`).
+- **`README.md`:** alle `v0.x.y`-vermeldingen moeten gelijk zijn aan de huidige release. Werk `README.md` bij **bij elke commit** waar de versie wijzigt (én controleer het bij elke commit).
 
 ## In code
 
@@ -23,7 +24,7 @@ Stel **expliciet** een versienummer voor vóór `git commit`, ook als er geen bu
 
 1. Noem huidige versie (`shared/version.py`).
 2. Stel nieuwe versie voor (patch/minor) op basis van de diff, of zeg "geen bump".
-3. Noem welke bestanden bij bump wél moeten mee: minimaal `shared/version.py` + `pyproject.toml`; runtime-strings volgen via imports.
+3. Noem welke bestanden bij bump wél moeten mee: minimaal `shared/version.py` + `pyproject.toml` + `README.md` (alle `v0.x.y`-vermeldingen); runtime-strings volgen via imports.
 
 Semver-richtlijn:
 
