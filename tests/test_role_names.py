@@ -82,3 +82,83 @@ def test_unicode_arts_assistent() -> None:
 def test_arts_assistent() -> None:
     text = "Opgesteld door arts-assistent Mwangi, geautoriseerd door dr. Slager."
     assert _names(text) == ["Mwangi"]
+
+
+def test_markdown_co_assistent_label() -> None:
+    text = "Gelre Ziekenhuizen. **Arts-assistent:** Okonkwo.\n\nOpgenomen op"
+    assert _names(text) == ["Okonkwo"]
+
+
+def test_co_assistent_hyphen_label() -> None:
+    text = "Huisarts Visser, praktijk te Twello\nCo-assistent: Okonkwo\n\nOpgenomen op"
+    assert "Okonkwo" in _names(text)
+
+
+def test_dossier_header_patient_surname() -> None:
+    text = "**KLINISCH DOSSIER — INTERNE GENEESKUNDE**\n\nPatiënt: Bakker, voornaam Joana"
+    assert _names(text) == ["Bakker"]
+
+
+def test_dossier_header_patientnaam() -> None:
+    text = "**Patiëntnaam:** Karim El Idrissi\nGeboortedatum: 04-02-1982"
+    assert _names(text) == ["Karim El Idrissi"]
+
+
+def test_notitie_verpleegkundige_obrien() -> None:
+    text = "tot 30 maart. **Notitie verpleegkundige O'Brien:** patiënte verstond instructies."
+    assert _names(text) == ["O'Brien"]
+
+
+def test_consult_door_fernandez() -> None:
+    text = "Goede diurese. Consult diëtetiek door Fernández ivm natriumbeperking."
+    assert _names(text) == ["Fernández"]
+
+
+def test_by_collega_mukherjee() -> None:
+    text = "Fysiotherapie ingezet door collega Mukherjee. Beloop op 17 maart."
+    assert _names(text) == ["Mukherjee"]
+
+
+def test_verpleegkundige_werkwoord() -> None:
+    text = "Naar afdeling B3. Verpleegkundige Okonkwo verzorgde de dagrapportage."
+    assert _names(text) == ["Okonkwo"]
+
+
+def test_internist_castro_without_dr() -> None:
+    text = "Brief verzonden naar verwijzer en aan internist Castro voor overdracht."
+    assert _names(text) == ["Castro"]
+
+
+def test_dochter_three_word_name() -> None:
+    text = "Dochter Aïsha El Amrani is eerste contactpersoon en bereikbaar."
+    assert _names(text) == ["Aïsha El Amrani"]
+
+
+def test_dietiste_yamamoto_adviseerde() -> None:
+    text = "Diëtiste Yamamoto adviseerde natriumbeperking."
+    assert _names(text) == ["Yamamoto"]
+
+
+def test_consult_longarts_mukherjee() -> None:
+    text = "Consult longarts Mukherjee aangevraagd. Insulineschema bijgesteld."
+    assert _names(text) == ["Mukherjee"]
+
+
+def test_medeoverleg_longarts_okafor() -> None:
+    text = "Medeoverleg met longarts Okafor en physician assistant Bos."
+    assert _names(text) == ["Okafor", "Bos"]
+
+
+def test_mantelzorger_bakr() -> None:
+    text = "Brief verzonden naar huisarts Dr. Visser en naar mantelzorger Bakr."
+    assert _names(text) == ["Bakr"]
+
+
+def test_geboortenaam_fernandez() -> None:
+    text = "Lucía (zie ook geboortenaam Fernández) Geboortedatum: 08-09-1947"
+    assert _names(text) == ["Fernández"]
+
+
+def test_label_name_not_greedy_opgenomen() -> None:
+    text = "Verpleegkundig specialist: Fernández  Opgenomen op 19-08-2025"
+    assert _names(text) == ["Fernández"]

@@ -1,0 +1,33 @@
+{
+  "version": "synthetic-holdout-adversarial-20",
+  "dataset_file": "dataset-20dossiers-adversarial.jsonl",
+  "sha256": "84451bf3c9c680c7f39be16971cfc7e6333fa2d2053eca19891962632188e300",
+  "record_count": 20,
+  "seed": 2,
+  "generator": "adversarial subset: holdout leak records + foreign NAME (max 20)",
+  "git_sha": "8b382df",
+  "created_at": "2026-06-19T11:32:24.911605+00:00",
+  "entity_count": 778,
+  "record_ids": [
+    "syn_315",
+    "syn_322",
+    "syn_328",
+    "syn_338",
+    "syn_340",
+    "syn_343",
+    "syn_350",
+    "syn_351",
+    "syn_357",
+    "syn_359",
+    "syn_366",
+    "syn_367",
+    "syn_369",
+    "syn_371",
+    "syn_372",
+    "syn_374",
+    "syn_375",
+    "syn_388",
+    "syn_393",
+    "syn_400"
+  ]
+}
