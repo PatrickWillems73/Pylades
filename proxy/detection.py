@@ -64,11 +64,61 @@ _DATE_BODY = r"\d{1,2}[-/]\d{1,2}[-/]\d{4}"
 # --- Ontslag (DISCHARGE_DATE) — vóór opname, want "verwacht ontslag … opname op …"
 _DISCHARGE_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(
+        rf"(?:^|\n)\s*ontslagbrief[^\n]*\n\s*datum\s+brief\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
         rf"(?:^|\n)\s*ontslagbrief[^\n]*\n\s*datum\s*:\s*({_DATE_BODY})",
         re.IGNORECASE | re.MULTILINE,
     ),
     re.compile(
         rf"(?:verwachte?\s+ontslag(?:datum)?(?:[^\n]{{0,55}}?))(?:[:]\s*|op\s+|rond\s+)({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:ontslag(?:datum)?(?:[^\n]{{0,60}}?))"
+        rf"(?:verwacht|verwachting|na\s+operatie)(?:[^\n]{{0,25}}?)omstreeks\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:geplande|voorlopige|vermoedelijke)\s+ontslag(?:datum)?(?:[^\n]{{0,30}}?)"
+        rf"(?:vastgesteld|gepland|geschat)\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"streefdatum\s+ontslag[^\n]{{0,40}}:\s*({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"voorgenomen\s+ontslag(?:[^\n]{{0,20}}?)op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"verwachte\s+ontslag(?:datum)?\s+is\s+vooralsnog\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:verwachte?\s+)?ontslag(?:datum)?\s+is\s+omstreeks\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:geplande\s+)?(?:voorlopige\s+)?ontslag(?:datum)?(?:[^\n]{{0,30}}?)na\s+stabilisatie\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"verwachte\s+ontslag(?:datum)?\s+van\s+huidige\s+opname\s+is\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:berichten\s+bij\s+ontslag,\s+)?naar\s+verwachting\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:ontslag(?:bestemming)?[^\n]{{0,15}}?)naar\s+huis\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:brief\s+verzonden[^\n]{{0,40}}?)op\s+({_DATE_BODY})",
         re.IGNORECASE,
     ),
     re.compile(
@@ -105,6 +155,30 @@ _ADMISSION_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"(?:waarvoor|bij|tijdens|na|verricht\s+tijdens)\s+opname\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"die\s+op\s+({_DATE_BODY})\s+werd\s+opgenomen",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:pati[eë]nt|pati[eë]nte|bovengenoemde\s+pati[eë]nt(?:e)?)\s+werd\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:bovengenoemde\s+)?pati[eë]nt(?:e)?\s+op\s+({_DATE_BODY})\s+werd\s+opgenomen",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"aanvraagdatum\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"voorlopige\s+opname\s+gepland\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:opgenomen|opnamedatum|opnemingsdatum)(?:[^\n]{{0,40}}?)"
         rf"(?:op\s+|:\s*)({_DATE_BODY})",
         re.IGNORECASE,
@@ -126,19 +200,123 @@ _ADMISSION_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"(?:op\s+de\s+afdeling(?:[^\n]{{0,50}}?))op\s+({_DATE_BODY})",
+        rf"(?:op\s+de\s+afdeling(?:[^\n.]{{0,50}}?))op\s+({_DATE_BODY})",
         re.IGNORECASE,
     ),
 )
 
 # --- Onderzoek (EXAM_DATE)
 _EXAM_KEYWORDS = (
-    r"onderzoek|onderzoeksdatum|scan|mri|ct|pet|echo|echocardiografie|"
-    r"thoraxfoto|röntgenfoto|x-thorax|ct-thorax|ecg|laboratorium|lab|"
+    r"onderzoek|onderzoeksdatum|scan|mri|ct|pet|echo|echocardiografie|echocardiogram|"
+    r"thoraxfoto|röntgenfoto|röntgen\s*thorax|röntgenthorax|x-thorax|ct-thorax|ecg|laboratorium|lab|"
     r"gastroscopie|coloscopie|colonoscopie|endoscopie|angiografie|biopsie|"
-    r"ecografie|ultrasoon|sonografie|mammografie|scopie|(?:\w+)?foto"
+    r"ecografie|ultrasoon|sonografie|mammografie|scopie|(?:\w+)?foto|bloedafname"
 )
 _EXAM_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
+    re.compile(
+        rf"datum\s+overleg\s*:\s*besproken(?:\s+tijdens(?:\s+\w+){{0,3}})?\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"besproken\s+tijdens(?:\s+oncologisch)?\s+mdo\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:vervolg-)?(?:mdo|oncologisch\s+mdo)\s+gepland\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"datum\s+consult\s*:\s*controleafspraak\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"datum\s+autorisatie\s*:\s*({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"geverifieerd\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"biopt\s*\(\s*({_DATE_BODY})\s*\)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"doorgegeven\s+aan\s+dr\.[^\n]{{0,40}}\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:pati[eë]nt|pati[eë]nte)\s+meldde\s+zich\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:pati[eë]nt|pati[eë]nte)\s+presenteerde\s+zich\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:pati[eë]nt|pati[eë]nte)\s+is\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:\w+\s+){{0,5}}overleg\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:eerstvolgend\s+|bespreking\s+gepland\s+tijdens\s+)?mdo\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"gepland\s+tijdens\s+mdo\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"datum\s+mdo\s*:\s*besproken\s+tijdens\s+wekelijks\s+overleg\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?<=[\.\s:])op\s+({_DATE_BODY})\s+werd\s+(?:een|de)\s+",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"aansluitend\s+is\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"ingezet\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:\w+\s+)?consult\s+gepland\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"verslag\s+van\s+controleafspraak\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"tijdens\s+consult\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:polikliniekbezoek|polibezoek)\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"verslag\s+geautoriseerd\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"verslag\s+akkoord\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"verslagdatum\s*:\s*opgesteld\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:nuchtere\s+)?bloedafname\s+op\s+({_DATE_BODY})",
+        re.IGNORECASE,
+    ),
     re.compile(
         rf"bloedafname\s+vond\s+plaats\s+op\s+({_DATE_BODY})",
         re.IGNORECASE,
@@ -203,15 +381,7 @@ _EXAM_DATE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     ),
 )
 
-_EXAM_DATE_PATTERNS_BEFORE_ADMISSION: Final[tuple[re.Pattern[str], ...]] = (
-    _EXAM_DATE_PATTERNS[0],
-    _EXAM_DATE_PATTERNS[1],
-    _EXAM_DATE_PATTERNS[2],
-    _EXAM_DATE_PATTERNS[3],
-    _EXAM_DATE_PATTERNS[4],
-    _EXAM_DATE_PATTERNS[5],
-    _EXAM_DATE_PATTERNS[6],
-)
+_EXAM_DATE_PATTERNS_BEFORE_ADMISSION: Final[tuple[re.Pattern[str], ...]] = _EXAM_DATE_PATTERNS[:25]
 _EXAM_DATE_PATTERNS_AFTER_ADMISSION: Final[tuple[re.Pattern[str], ...]] = _EXAM_DATE_PATTERNS[7:]
 
 CONTEXT_DATE_PATTERNS: Final[list[tuple[EntityType, re.Pattern[str]]]] = [

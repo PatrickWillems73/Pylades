@@ -313,6 +313,54 @@ class TestContextDates:
         assert admissions[0].original == "15-03-2024"
         assert birthdates[0].original == "03-04-1972"
 
+    def test_holdout_discharge_omstreeks(self) -> None:
+        text = "Wij berichten bij ontslag, naar verwachting omstreeks 17-06-2024."
+        result = detect_regex(text)
+        discharges = [e for e in result if e.entity_type is EntityType.DISCHARGE_DATE]
+        assert len(discharges) == 1
+        assert discharges[0].original == "17-06-2024"
+
+    def test_holdout_discharge_datum_brief(self) -> None:
+        text = "ONTSLAGBRIEF\n\nDatum brief: 07-01-2022\n\nGeachte collega,"
+        result = detect_regex(text)
+        discharges = [e for e in result if e.entity_type is EntityType.DISCHARGE_DATE]
+        assert len(discharges) == 1
+        assert discharges[0].original == "07-01-2022"
+
+    def test_holdout_admission_waarvoor_opname(self) -> None:
+        text = "STEMI anterior wand (I21.0), waarvoor opname op 01-02-2021 en ontslag op 07-07-2022."
+        result = detect_regex(text)
+        admissions = [e for e in result if e.entity_type is EntityType.ADMISSION_DATE]
+        assert any(e.original == "01-02-2021" for e in admissions)
+
+    def test_holdout_admission_werd_verwezen(self) -> None:
+        text = "Reden van opname:\nPatiënt werd op 11-11-2025 verwezen door huisarts dr. Visser."
+        result = detect_regex(text)
+        admissions = [e for e in result if e.entity_type is EntityType.ADMISSION_DATE]
+        assert len(admissions) == 1
+        assert admissions[0].original == "11-11-2025"
+
+    def test_holdout_exam_mdo_besproken(self) -> None:
+        text = "Datum overleg: besproken op 21-08-2024\nLocatie: Maasstad Ziekenhuis"
+        result = detect_regex(text)
+        exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+        assert len(exams) == 1
+        assert exams[0].original == "21-08-2024"
+
+    def test_holdout_exam_geverifieerd(self) -> None:
+        text = "Verslag opgesteld door dr. Veldhuizen, geverifieerd op 08-03-2021."
+        result = detect_regex(text)
+        exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+        assert len(exams) == 1
+        assert exams[0].original == "08-03-2021"
+
+    def test_holdout_exam_biopt_paren(self) -> None:
+        text = "PATHOLOGIE\nBiopt (12-11-2022): matig gedifferentieerd adenocarcinoom."
+        result = detect_regex(text)
+        exams = [e for e in result if e.entity_type is EntityType.EXAM_DATE]
+        assert len(exams) == 1
+        assert exams[0].original == "12-11-2022"
+
 
 # ---------------------------------------------------------------------------
 # Overlap-resolutie + thresholds
