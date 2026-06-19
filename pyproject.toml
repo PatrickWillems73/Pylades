@@ -1,6 +1,6 @@
 [project]
 name = "pylades"
-version = "0.2.9"
+version = "0.2.10"
 description = "Lokale pseudonimiserende proxy voor extern LLM-gebruik (release sync: shared/version.py)"
 readme = "README.md"
 requires-python = ">=3.11"

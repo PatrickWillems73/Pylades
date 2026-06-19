@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import re
 
-# Eén naamwoord: begint met hoofdletter (Unicode), geen lowercase ASCII aanstart.
-_NAME_WORD = r"(?-i:[^\W\d_a-z][\w'-]*)"
+# Eén naamwoord: hoofdletter-woord, initialen (`J.`, `L.`) of tussenvoegsel.
+_TUSSENVOEGSEL = r"(?:[Dd]e|[Vv]an|[Dd]er|[Dd]en|[Tt]er|[Ee]l|[Ii]bn|'t)"
+_NAME_WORD = r"(?-i:(?:[A-Z]\.|[^\W\d_a-z][\w'-]*))"
 # Optioneel extra woorden (max. 3 totaal); sluit sectiekoppen uit (`Opgenomen`, …).
 _NON_NAME_WORD = (
     r"Opgenomen|Geboorte(?:datum)?|Leeftijd|Datum|Reden|Behandel(?:ing)?|"
     r"Opname|Ontslag|Conclusie|Beloop|Anamnese|Medicatie|Diagnose|Werk|Consult|"
     r"Gecontroleerd|Opgesteld|Verzonden|Ingesteld|Start(?:te)?"
 )
-_NAME = rf"({_NAME_WORD}(?:[ \t]+(?!{_NON_NAME_WORD}\b){_NAME_WORD}){{0,2}})"
+_NAME = (
+    rf"({_NAME_WORD}(?:[ \t]+(?!{_NON_NAME_WORD}\b)"
+    rf"(?:{_TUSSENVOEGSEL}\s+)?{_NAME_WORD}){{0,2}})"
+)
 
 # Markdown-koppen in synthetische dossiers (`**Arts-assistent:**`).
 _MD = r"\*{0,2}"
@@ -100,10 +104,48 @@ _DIETIST_WORKS = re.compile(
 # `(zie ook geboortenaam Fernández)`.
 _GEBOORTENAAM = re.compile(rf"(?i)\bgeboortenaam\s+({_NAME_WORD})\b")
 
-# `naar mantelzorger Bakr` / `Opgesteld door Słowik`.
+# `Verwijzer: huisarts J. de Groot, Huisartsenpraktijk …`.
+_VERWIJzer_HUISARTS = re.compile(
+    rf"(?i)\bverwijzer{_COLON}\s*(huisarts\s+[^,\n]+)"
+)
+
+# `dr. Al-Rashidi (radiotherapeut)` / `Dr. Al-Rashidi adviseert`.
+_DR_ROLE_PAREN = re.compile(
+    rf"(?i)\bdr\.?\s+({_NAME_WORD})\s+\([^)]{{3,50}}\)"
+)
+_DR_ADVISEERT = re.compile(
+    rf"(?i)\bDr\.\s+({_NAME_WORD})\s+(?:adviseert|besproken|rapporteert)\b"
+)
+
+# `- Tilanus, patholoog` / `- De Wit, verpleegkundig specialist`.
+_DASH_NAME_COMMA_ROLE = re.compile(
+    rf"(?i)(?:^|\n)\s*-\s+(?:drs?\.?\s+)?({_NAME})\s*,\s*"
+    rf"(?:patholoog|radioloog|cardioloog|internist|chirurg|oncolog\w+|"
+    rf"verpleegkundig\s+specialist|medisch\s+oncoloog|radiotherapeut)\b"
+)
+# `- verpleegkundig specialist L. Smit`.
+_DASH_ROLE_LABEL = re.compile(
+    rf"(?i)(?:^|\n)\s*-\s+(verpleegkundig\s+specialist\s+{_NAME})"
+)
+# `patholoog (Tilanus):`.
+_ROLE_PAREN_NAME = re.compile(
+    rf"(?i)\b(?:patholoog|radioloog|cardioloog|internist|chirurg)\s+\(({_NAME_WORD})\):"
+)
+# `Verslag opgesteld door verpleegkundig specialist L. Smit`.
+_OPGESTELD_DOOR_ROLE = re.compile(
+    rf"(?i)\b(?:verslag\s+)?opgesteld\s+door\s+(verpleegkundig\s+specialist\s+{_NAME})"
+)
+
+# `naar mantelzorger Bakr` / `Opgesteld door Słowik` / `cc naar Oyelaran`.
 _NAAR_MANTELZORGER = re.compile(rf"(?i)\bnaar\s+mantelzorger\s+({_NAME_WORD})\b")
+_CC_NAAR = re.compile(rf"(?i)\bcc\s+naar\s+({_NAME_WORD})\b")
 _OPGESTELD_DOOR = re.compile(
     rf"(?i)\b(?:opgesteld|medeondertekend|ondertekend)\s+door\s+({_NAME_WORD})\b"
+)
+
+# `Controle … op de polikliniek bij Mukherjee`.
+_POLIKLINIEK_BIJ = re.compile(
+    rf"(?i)\b(?:op\s+de\s+)?polikliniek\s+bij\s+({_NAME_WORD})\b"
 )
 
 # `Verpleegkundige Okonkwo verzorgde` (werkwoord na de naam).
@@ -144,7 +186,7 @@ _THROUGH_NAME = re.compile(
 # `naar huisarts Okonkwo en` (zonder dubbele punt). Sla tussenvoegsel over
 # (`huisarts De Dokter` → `_HUISARTS_DE_NAME`).
 _HUISARTS_SURNAME = re.compile(
-    rf"(?i)\bhuisarts(?![ \t]+(?:dr\.|drs\.))\s+({_NAME_WORD})(?![ \t]+{_NAME_WORD})\b"
+    rf"(?i)\bhuisarts(?![ \t]+(?:dr\.|drs\.))\s+({_NAME})\b"
 )
 
 # Adversariële achternaam die op een beroep lijkt (`huisarts De Dokter`).
@@ -174,10 +216,19 @@ _ROLE_PATTERNS: tuple[re.Pattern[str], ...] = (
     _CONSULT_DOOR,
     _CONSULT_SPECIALIST,
     _MEDEOVERLEG,
+    _VERWIJzer_HUISARTS,
+    _DR_ROLE_PAREN,
+    _DR_ADVISEERT,
+    _DASH_NAME_COMMA_ROLE,
+    _DASH_ROLE_LABEL,
+    _ROLE_PAREN_NAME,
+    _OPGESTELD_DOOR_ROLE,
     _BY_COLLEGA,
     _DIETIST_WORKS,
     _GEBOORTENAAM,
     _NAAR_MANTELZORGER,
+    _CC_NAAR,
+    _POLIKLINIEK_BIJ,
     _OPGESTELD_DOOR,
     _VERPLEEGKUNDIGE_WERKWOORD,
     _REFERRAL_DIETIST,
@@ -192,14 +243,28 @@ _ROLE_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+_TUSSENVOEGSEL_PART = re.compile(
+    r"^(?:de|van|der|den|ter|el|ibn|'t)$",
+    re.IGNORECASE,
+)
+_INITIAL_PART = re.compile(r"^[A-Z]\.$")
+
+
 def _looks_like_proper_name(surface: str) -> bool:
     """Extra filter: elke naam-component start met een hoofdletter (Unicode)."""
+    surface = re.sub(r"(?i)^huisarts\s+", "", surface.strip())
+    surface = re.sub(r"(?i)^verpleegkundig\s+specialist\s+", "", surface.strip())
     parts = surface.split()
     if not parts or len(parts) > 4:
         return False
-    if any(re.fullmatch(_NON_NAME_WORD, part, re.IGNORECASE) for part in parts):
-        return False
-    return all(part and not part[0].islower() for part in parts)
+    for part in parts:
+        if _INITIAL_PART.match(part) or _TUSSENVOEGSEL_PART.match(part):
+            continue
+        if re.fullmatch(_NON_NAME_WORD, part, re.IGNORECASE):
+            return False
+        if not part or part[0].islower():
+            return False
+    return True
 
 
 def detect_role_context_name_spans(text: str) -> list[tuple[int, int, str]]:
@@ -222,4 +287,22 @@ def detect_role_context_name_spans(text: str) -> list[tuple[int, int, str]]:
                 continue
             seen.add(key)
             found.append((start, end, name))
-    return found
+    return _drop_subsumed_spans(found)
+
+
+def _drop_subsumed_spans(spans: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+    """Verwijder spans die volledig in een andere span vallen."""
+    if len(spans) <= 1:
+        return spans
+    kept: list[tuple[int, int, str]] = []
+    for i, (s1, e1, name1) in enumerate(spans):
+        subsumed = False
+        for j, (s2, e2, _) in enumerate(spans):
+            if i == j:
+                continue
+            if s2 <= s1 and e2 >= e1 and (s2, e2) != (s1, e1):
+                subsumed = True
+                break
+        if not subsumed:
+            kept.append((s1, e1, name1))
+    return kept

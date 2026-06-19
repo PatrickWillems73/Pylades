@@ -520,17 +520,19 @@ class TestLLMLayer:
         assert result == []
 
     def test_payload_parser_accepts_valid_json(self) -> None:
-        text = "We onderzoeken het medicijn AspirinePlus binnen PROJ-42."
+        text = "We onderzoeken het medicijn AspirinePlus binnen PROJ-42. Coassistent Okonkwo."
         payload = {
             "entities": [
                 {"text": "AspirinePlus", "type": "product", "confidence": 0.9},
                 {"text": "PROJ-42", "type": "project", "confidence": 0.85},
+                {"text": "Okonkwo", "type": "name", "confidence": 0.88},
             ]
         }
         entities = _llm_entities_from_payload(text, payload)
         types = _types_in(entities)
         assert EntityType.PRODUCT in types
         assert EntityType.PROJECT in types
+        assert EntityType.NAME in types
 
     def test_payload_parser_rejects_unknown_type(self) -> None:
         entities = _llm_entities_from_payload(
@@ -646,6 +648,10 @@ def test_regex_patterns_cover_all_typecodes_we_claim_to_detect() -> None:
     assert expected_regex_types <= covered
 
 
-def test_llm_type_map_only_targets_product_and_project() -> None:
-    # Laag 3 mag bewust niet alle types claimen die regex of DEDUCE al doen.
-    assert set(_LLM_TYPE_MAP.values()) == {EntityType.PRODUCT, EntityType.PROJECT}
+def test_llm_type_map_covers_product_project_and_name() -> None:
+    # Laag 3: product/project + NAME (context-gaten); geen regex/DEDUCE-types.
+    assert set(_LLM_TYPE_MAP.values()) == {
+        EntityType.PRODUCT,
+        EntityType.PROJECT,
+        EntityType.NAME,
+    }

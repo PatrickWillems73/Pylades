@@ -162,3 +162,48 @@ def test_geboortenaam_fernandez() -> None:
 def test_label_name_not_greedy_opgenomen() -> None:
     text = "Verpleegkundig specialist: Fernández  Opgenomen op 19-08-2025"
     assert _names(text) == ["Fernández"]
+
+
+def test_polikliniek_bij_mukherjee() -> None:
+    text = "Controle over twee weken op de polikliniek bij Mukherjee. Ontslagbrief verzonden."
+    assert _names(text) == ["Mukherjee"]
+
+
+def test_cc_naar_oyelaran() -> None:
+    text = "Ontslagbrief verzonden naar verwijzend arts en cc naar Oyelaran."
+    assert _names(text) == ["Oyelaran"]
+
+
+def test_verwijzer_huisarts_de_groot() -> None:
+    text = "Verwijzer: huisarts J. de Groot, Huisartsenpraktijk Centrum, Houten"
+    assert _names(text) == ["huisarts J. de Groot"]
+
+
+def test_dr_role_paren_al_rashidi() -> None:
+    text = "Aanwezig: dr. Beekman (oncoloog), dr. Al-Rashidi (radiotherapeut), dr. Vermeulen"
+    assert "Al-Rashidi" in _names(text)
+
+
+def test_dr_adviseert_al_rashidi() -> None:
+    text = "Dr. Al-Rashidi adviseert neoadjuvante chemoradiatie."
+    assert _names(text) == ["Al-Rashidi"]
+
+
+def test_dash_name_comma_role_tilanus() -> None:
+    text = "- De Wit, verpleegkundig specialist\n- Tilanus, patholoog\n"
+    assert "Tilanus" in _names(text)
+
+
+def test_role_paren_name_tilanus() -> None:
+    text = "Beoordeling patholoog (Tilanus): adenocarcinoom."
+    assert _names(text) == ["Tilanus"]
+
+
+def test_dash_role_label_smit() -> None:
+    text = "- verpleegkundig specialist L. Smit\n"
+    assert _names(text) == ["verpleegkundig specialist L. Smit"]
+
+
+def test_opgesteld_door_verpleegkundig_specialist_smit() -> None:
+    text = "Verslag opgesteld door verpleegkundig specialist L. Smit, Maasstad Ziekenhuis."
+    assert _names(text) == ["verpleegkundig specialist L. Smit"]

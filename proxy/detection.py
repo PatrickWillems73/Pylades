@@ -648,10 +648,12 @@ def detect_deduce_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
 
 _LLM_SYSTEM_PROMPT: Final[str] = (
     "Je bent een NER-assistent voor Nederlandse zorgteksten. Identificeer "
-    "alléén product-namen (medicijnen, apparaten) en project-codes. Negeer "
-    "alle andere entity-soorten — die zijn al elders gedetecteerd. Antwoord "
-    'uitsluitend in JSON: {"entities": [{"text": "...", '
-    '"type": "product"|"project", "confidence": 0.0-1.0}]}'
+    "product-namen (medicijnen, apparaten), project-codes, en persoonsnamen "
+    "(achternamen, initialen, volledige namen) in zorgcontext — vooral namen "
+    "achter rollen, in correspondentie of MDO-notulen. Negeer andere "
+    "entity-soorten (BSN, datums, adressen, …); die zijn al elders gedetecteerd. "
+    "Antwoord uitsluitend in JSON: {\"entities\": [{\"text\": \"...\", "
+    '"type": "product"|"project"|"name", "confidence": 0.0-1.0}]}'
 )
 
 
@@ -756,6 +758,7 @@ def detect_llm(text: str, *, backend: Layer3Backend | None = None) -> list[Entit
 _LLM_TYPE_MAP: Final[dict[str, EntityType]] = {
     "product": EntityType.PRODUCT,
     "project": EntityType.PROJECT,
+    "name": EntityType.NAME,
 }
 
 
