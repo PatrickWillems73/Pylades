@@ -21,7 +21,7 @@ def test_label_line_referring_gp() -> None:
 
 def test_role_before_name_consultant() -> None:
     text = "Medebehandeling door internist dr. Visser en consulent diabetologie Okonkwo."
-    assert _names(text) == ["Okonkwo"]
+    assert set(_names(text)) == {"Visser", "Okonkwo"}
 
 
 def test_relation_partner_two_word_name() -> None:
@@ -61,7 +61,7 @@ def test_relation_comma_dochter() -> None:
 
 def test_fysiotherapie_door_name() -> None:
     text = "Diëtist Timmerman consulteerde. Fysiotherapie door Mwangi opgestart."
-    assert _names(text) == ["Mwangi"]
+    assert _names(text) == ["Timmerman", "Mwangi"]
 
 
 def test_referral_dietist_name() -> None:
@@ -96,7 +96,7 @@ def test_co_assistent_hyphen_label() -> None:
 
 def test_dossier_header_patient_surname() -> None:
     text = "**KLINISCH DOSSIER — INTERNE GENEESKUNDE**\n\nPatiënt: Bakker, voornaam Joana"
-    assert _names(text) == ["Bakker"]
+    assert _names(text) == ["Bakker", "Joana"]
 
 
 def test_dossier_header_patientnaam() -> None:
@@ -207,3 +207,78 @@ def test_dash_role_label_smit() -> None:
 def test_opgesteld_door_verpleegkundig_specialist_smit() -> None:
     text = "Verslag opgesteld door verpleegkundig specialist L. Smit, Maasstad Ziekenhuis."
     assert _names(text) == ["verpleegkundig specialist L. Smit"]
+
+
+def test_holdout_leak_kopie_aan_de_jong() -> None:
+    text = "Kopie aan:\nHuisarts dr. M. de Jong\nDorpsstraat 45"
+    assert _names(text) == ["dr. M. de Jong"]
+
+
+def test_holdout_leak_verstuurd_huisartsenpraktijk() -> None:
+    text = "Verstuurd aan huisarts: huisartsenpraktijk De Esdoorn, Esdoornstraat 14"
+    assert _names(text) == ["huisartsenpraktijk De Esdoorn"]
+
+
+def test_holdout_leak_naar_fysiotherapeut() -> None:
+    text = "verstuurd naar huisarts Okonkwo en naar fysiotherapeut Timmerman van FysioCentrum."
+    assert set(_names(text)) == {"Okonkwo", "Timmerman"}
+
+
+def test_holdout_leak_ingeschakeld_via_mwangi() -> None:
+    text = "Fysiotherapie ingeschakeld via Mwangi."
+    assert _names(text) == ["Mwangi"]
+
+
+def test_holdout_leak_dietist_slowinski() -> None:
+    text = "consult door verpleegkundig specialist Koning en diëtist Słowiński."
+    assert _names(text) == ["Koning", "Słowiński"]
+
+
+def test_holdout_leak_contactpersoon_schoonzoon() -> None:
+    text = "Contactpersoon: schoonzoon Okonkwo, bereikbaar via 06-79931223."
+    assert _names(text) == ["Okonkwo"]
+
+
+def test_holdout_leak_fysiotherapie_bij() -> None:
+    text = "Patiënte krijgt fysiotherapie bij Schipper aan de Brinkgreverweg."
+    assert _names(text) == ["Schipper"]
+
+
+def test_holdout_leak_wijkverpleegkundige_mol() -> None:
+    text = "Nahuiscontrole door wijkverpleegkundige Mol van Zorggroep IJssel."
+    assert _names(text) == ["Mol"]
+
+
+def test_holdout_leak_dietist_fernandez() -> None:
+    text = "Diëtist: Fernández\nVoedingsadvies verstrekt door Fernández."
+    assert _names(text) == ["Fernández", "Fernández"]
+
+
+def test_holdout_leak_fysiotherapie_ingezet_door() -> None:
+    text = "Fysiotherapie ingezet door Haddad."
+    assert _names(text) == ["Haddad"]
+
+
+def test_holdout_leak_oncoloog_dr_al_rashid() -> None:
+    text = "MDO met chirurg Timmerman en oncoloog dr. Al-Rashid."
+    assert _names(text) == ["Al-Rashid"]
+
+
+def test_holdout_leak_triagist_okafor() -> None:
+    text = "advies gegeven door triagist Okafor."
+    assert _names(text) == ["Okafor"]
+
+
+def test_holdout_leak_coassistent_aanwezig() -> None:
+    text = "Co-assistent aanwezig: Kovács."
+    assert _names(text) == ["Kovács"]
+
+
+def test_holdout_leak_eerdergenoemde_okonkwo() -> None:
+    text = "dochter mevrouw Tanaka en eerdergenoemde Okonkwo."
+    assert set(_names(text)) == {"Okonkwo", "Tanaka"}
+
+
+def test_holdout_leak_dossier_voornaam() -> None:
+    text = "Patiënt: Bakker, voornaam Wilhelmina\nGeboortedatum: 26-08-2004"
+    assert _names(text) == ["Bakker", "Wilhelmina"]

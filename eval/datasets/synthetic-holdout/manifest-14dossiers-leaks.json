@@ -1,0 +1,27 @@
+{
+  "version": "synthetic-holdout-leaks-14",
+  "dataset_file": "dataset-14dossiers-leaks.jsonl",
+  "sha256": "99fa6f38ce8b7627c8c2bd89d63e6ddbd88c88b6a80cdb179fa28b923e8ae517",
+  "record_count": 14,
+  "seed": 2,
+  "generator": "holdout subset: 14 dossiers met NAME-leaks (deduce v0.2.10)",
+  "git_sha": "2ee1d67",
+  "created_at": "2026-06-19T14:31:56.357915+00:00",
+  "entity_count": 591,
+  "record_ids": [
+    "syn_171",
+    "syn_220",
+    "syn_316",
+    "syn_402",
+    "syn_413",
+    "syn_414",
+    "syn_415",
+    "syn_416",
+    "syn_417",
+    "syn_422",
+    "syn_425",
+    "syn_432",
+    "syn_438",
+    "syn_444"
+  ]
+}

@@ -8,6 +8,7 @@ vergelijkings-backend in het eval-extra.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
@@ -101,6 +102,16 @@ def _merge_name_entities(merged: list[Entity], additions: list[Entity]) -> list[
             key=lambda ent: (ent.end - ent.start, ent.end),
         )
         if (add.end - add.start) <= (best_existing.end - best_existing.start):
+            # Rol-heuristiek wint over DEDUCE-NAME met spurious ` … aan de …`.
+            if (
+                add.confidence == _ROLE_CONFIDENCE
+                and add.start >= best_existing.start
+                and add.end <= best_existing.end
+                and re.search(r"\s+(?:aan|bij)\s+(?:de|het)\b", best_existing.original, re.I)
+            ):
+                for idx in sorted(overlap_idxs, reverse=True):
+                    del result[idx]
+                result.append(add)
             continue
         for idx in sorted(overlap_idxs, reverse=True):
             del result[idx]

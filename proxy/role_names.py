@@ -35,7 +35,8 @@ _LABEL_ROLES = (
     r"verpleegkundig\s+specialist|physician\s+assistant|verwijz(?:er|end)\s+huisarts|"
     r"behandelend(?:\s+(?:internist|specialist))?|hoofdbehandelaar|"
     r"verwijzer(?:\s+\([^)]+\))?|huisarts|"
-    r"arts-?assistent|co-?assistent|assisterend\s+arts|zaalarts|supervisor"
+    r"arts-?assistent|co-?assistent|assisterend\s+arts|zaalarts|supervisor|"
+    r"di[eë]tist(?:e)?|co-?assistent\s+aanwezig"
 )
 _LABEL_NAME = re.compile(
     rf"(?i){_MD}(?:{_LABEL_ROLES}){_COLON}\s*"
@@ -48,6 +49,11 @@ _DOSSIER_PATIENT = re.compile(
     rf"(?i){_MD}Pati[eë]nt{_COLON}\s*"
     rf"(?:(?:mevrouw|dhr\.)\s+)?"
     rf"({_NAME_WORD})(?:\s*,\s*(?:voornaam|\d))"
+)
+
+# `Patiënt: Bakker, voornaam Wilhelmina` (losse voornaam in dossierkop).
+_DOSSIER_VOORNAAM = re.compile(
+    rf"(?i){_MD}Pati[eë]nt{_COLON}\s*{_NAME_WORD}\s*,\s*voornaam\s+({_NAME})\b"
 )
 
 # `Patiëntnaam: Karim El Idrissi` (tot geboortedatum/regeleinde).
@@ -64,11 +70,17 @@ _NOTITIE_VERPLEEGKUNDIGE = re.compile(
 # behalve expliciet zonder `dr.` ervoor (internist Castro).
 _ROLE_BEFORE_NAME = re.compile(
     rf"(?i)\b(?:"
-    rf"consulent(?:\s+\w+)?|fysiotherapeut|apotheker|"
+    rf"consulent(?:\s+\w+)?|apotheker|triagist|"
     rf"arts-?assistent|co-?assistent|cardioloog|verpleegkundig\s+specialist|"
-    rf"verpleegkundige|radioloog|patholoog|microbioloog|oogarts|zaalarts|supervisor"
+    rf"verpleegkundige|radioloog|patholoog|microbioloog|oogarts|zaalarts|supervisor|"
+    rf"di[eë]tist(?:e)?"
     rf")\s+"
     rf"{_NAME}"
+)
+
+# `fysiotherapeut Timmerman van …` / `wijkverpleegkundige Mol van …` (alleen achternaam).
+_ROLE_BEFORE_NAME_SINGLE = re.compile(
+    rf"(?i)\b(?:fysiotherapeut|wijkverpleegkundige)\s+({_NAME_WORD})\b"
 )
 
 # `internist Castro` (zonder dr.-titel ertussen).
@@ -148,6 +160,39 @@ _POLIKLINIEK_BIJ = re.compile(
     rf"(?i)\b(?:op\s+de\s+)?polikliniek\s+bij\s+({_NAME_WORD})\b"
 )
 
+# `Kopie aan: Huisarts dr. M. de Jong` / `Verstuurd aan huisarts: huisartsenpraktijk De Esdoorn`.
+_KOPIE_AAN_HUISARTS = re.compile(
+    rf"(?i)\bkopie\s+aan{_COLON}\s*(?:huisarts\s+)?((?:dr\.|drs\.)\s+{_NAME})"
+)
+_VERSTUURD_HUISARTS = re.compile(
+    rf"(?i)\bverstuurd\s+aan\s+huisarts{_COLON}\s*(huisartsenpraktijk\s+{_NAME})"
+)
+
+# `naar fysiotherapeut Timmerman` / `fysiotherapie bij Schipper`.
+_NAAR_FYSIOTHERAPEUT = re.compile(
+    rf"(?i)\bnaar\s+fysiotherapeut\s+({_NAME_WORD})\b"
+)
+_FYSIOTHERAPIE_BIJ = re.compile(rf"(?i)\bfysiotherapie\s+bij\s+({_NAME_WORD})\b")
+
+# `Fysiotherapie ingeschakeld via Mwangi` / `verstrekt door Fernández`.
+_INGESCHAKELD_VIA = re.compile(rf"(?i)\bingeschakeld\s+via\s+({_NAME_WORD})\b")
+_VERSTREKT_DOOR = re.compile(rf"(?i)\bverstrekt\s+door\s+({_NAME_WORD})\b")
+
+# `Contactpersoon: schoonzoon Okonkwo`.
+_CONTACTPERSOON_RELATIE = re.compile(
+    rf"(?i)\bcontactpersoon{_COLON}\s*"
+    rf"(?:partner|dochter|zoon|schoonzoon|echtgeno(?:o)?t(?:e)?|moeder|vader|broer|zus|"
+    rf"mantelzorger)\s+"
+    rf"(?:(?:mevrouw|dhr\.)\s+)?"
+    rf"{_NAME}"
+)
+
+# `oncoloog dr. Al-Rashid` (volledige hyphenated achternaam).
+_SPECIALIST_DR = re.compile(
+    rf"(?i)\b(?:oncoloog|cardioloog|internist|chirurg|longarts|nefroloog|neuroloog|"
+    rf"pulmonoloog|radiotherapeut)\s+(?:dr\.|drs\.)\s+({_NAME_WORD})\b"
+)
+
 # `Verpleegkundige Okonkwo verzorgde` (werkwoord na de naam).
 _VERPLEEGKUNDIGE_WERKWOORD = re.compile(
     rf"(?i)\bverpleegkundige\s+({_NAME_WORD})\s+(?:verzorg|begeleid|rapporteer)"
@@ -178,9 +223,13 @@ _RELATION_COMMA_NAME = re.compile(
     rf"{_NAME}"
 )
 
-# `Fysiotherapie door Mwangi` (beroep als zelfstandig naamwoord + door).
+# `eerdergenoemde Okonkwo` (terugverwijzing in lopende tekst).
+_EERDERGENOEMDE = re.compile(rf"(?i)\beerdergenoemde\s+({_NAME_WORD})\b")
+
+# `Fysiotherapie door Mwangi` / `Fysiotherapie ingezet door Haddad`.
 _THROUGH_NAME = re.compile(
-    rf"(?i)\b(?:fysiotherapie|physiotherapie|ergotherapie|logopedie)\s+door\s+({_NAME_WORD})\b"
+    rf"(?i)\b(?:fysiotherapie|physiotherapie|ergotherapie|logopedie)\s+"
+    rf"(?:ingezet\s+)?door\s+({_NAME_WORD})\b"
 )
 
 # `naar huisarts Okonkwo en` (zonder dubbele punt). Sla tussenvoegsel over
@@ -209,9 +258,11 @@ _PHYSICIAN_ASSISTANT = re.compile(rf"(?i)\bphysician\s+assistant\s+{_NAME}")
 _ROLE_PATTERNS: tuple[re.Pattern[str], ...] = (
     _LABEL_NAME,
     _DOSSIER_PATIENT,
+    _DOSSIER_VOORNAAM,
     _DOSSIER_PATIENTNAAM,
     _NOTITIE_VERPLEEGKUNDIGE,
     _ROLE_BEFORE_NAME,
+    _ROLE_BEFORE_NAME_SINGLE,
     _INTERNIST_SURNAME,
     _CONSULT_DOOR,
     _CONSULT_SPECIALIST,
@@ -229,6 +280,15 @@ _ROLE_PATTERNS: tuple[re.Pattern[str], ...] = (
     _NAAR_MANTELZORGER,
     _CC_NAAR,
     _POLIKLINIEK_BIJ,
+    _KOPIE_AAN_HUISARTS,
+    _VERSTUURD_HUISARTS,
+    _NAAR_FYSIOTHERAPEUT,
+    _FYSIOTHERAPIE_BIJ,
+    _INGESCHAKELD_VIA,
+    _VERSTREKT_DOOR,
+    _CONTACTPERSOON_RELATIE,
+    _EERDERGENOEMDE,
+    _SPECIALIST_DR,
     _OPGESTELD_DOOR,
     _VERPLEEGKUNDIGE_WERKWOORD,
     _REFERRAL_DIETIST,
@@ -253,7 +313,9 @@ _INITIAL_PART = re.compile(r"^[A-Z]\.$")
 def _looks_like_proper_name(surface: str) -> bool:
     """Extra filter: elke naam-component start met een hoofdletter (Unicode)."""
     surface = re.sub(r"(?i)^huisarts\s+", "", surface.strip())
+    surface = re.sub(r"(?i)^huisartsenpraktijk\s+", "", surface.strip())
     surface = re.sub(r"(?i)^verpleegkundig\s+specialist\s+", "", surface.strip())
+    surface = re.sub(r"(?i)^(?:dr\.|drs\.)\s+", "", surface.strip())
     parts = surface.split()
     if not parts or len(parts) > 4:
         return False

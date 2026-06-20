@@ -414,9 +414,9 @@ REGEX_PATTERNS: Final[list[tuple[EntityType, re.Pattern[str], Callable[[str], bo
     (
         EntityType.ADDRESS,
         re.compile(
-            r"\b(?:[A-Z][\w-]+\s+)?[A-Za-z][\w-]*"
+            r"\b(?:[A-Z][\w-]+[ \t]+)?[A-Za-z][\w-]*"
             r"(?:straat|weg|laan|plein|gracht|kade|singel|dreef|pad|hof|boulevard|steeg)"
-            r"\s+\d{1,4}[A-Za-z]?\b",
+            r"[ \t]+\d{1,4}[A-Za-z]?\b",
             re.IGNORECASE,
         ),
         None,
