@@ -210,12 +210,16 @@ worden GLiNER/DEDUCE overgeslagen. Geen `#`-commentaar op dezelfde regel als
 Ontbrekende modellen worden in `compare` overgeslagen (met melding), zodat een
 deelomgeving toch een rapport oplevert.
 
-## 8. Lokale LLM (laag 3)
+## 8. Lokale LLM (laag 3 — eval-only)
 
-Benchmark van laag-3 jargon/product/projectdetectie via Ollama (`detect_llm()` in
-[proxy/detection.py](proxy/detection.py)): huidige `qwen3:1.7b` vs alternatieven
-binnen 8 GB. De oracle-rol (volledige NER of upstream-vervanging) is expliciet
-v1.0 en buiten scope.
+Laag 3 is **optioneel** en **standaard uit** in de runtime (`use_llm=False`).
+Productie-NAME komt uit regex + DEDUCE + rol-heuristiek; dit hoofdstuk beschrijft
+alleen het **eval-harnas** en experimentele backends.
+
+Benchmark van laag-3 jargon/product/projectdetectie (en experimenteel NAME) via
+Ollama (`detect_llm()` in [proxy/detection.py](proxy/detection.py)): huidige
+`qwen3:1.7b` vs alternatieven binnen 8 GB. De oracle-rol (volledige NER of
+upstream-vervanging) is expliciet v1.0 en buiten scope.
 
 **Pluggable backend.** Laag 3 heeft een `Layer3Backend`-protocol; de runtime
 gebruikt `OllamaBackend` (default), het harnas kan een alternatieve backend

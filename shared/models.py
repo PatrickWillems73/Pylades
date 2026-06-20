@@ -185,9 +185,11 @@ class Template(BaseModel):
     use_llm: bool = Field(
         default=False,
         description=(
-            "Schakelt detectielaag 3 (lokaal Ollama-LLM voor product- en "
-            "projectnamen) in voor deze template. Default uit; vereist een "
-            "draaiende Ollama-server met het geconfigureerde model."
+            "Optionele detectielaag 3 (lokaal Ollama-LLM). Default uit: "
+            "productie gebruikt regex + DEDUCE + rol-heuristiek voor NAME. "
+            "Laag 3 is bedoeld voor eval/experiment (product/project; NAME "
+            "experimenteel in het laag-3-prompt) en vereist een draaiende "
+            "Ollama-server met het geconfigureerde model."
         ),
     )
     default_mode: PseudonymizationMode | None = None

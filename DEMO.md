@@ -218,3 +218,30 @@ resolver de per-entity override correct toepaste boven super-default.
 
 Voor automatische verificatie van diezelfde garanties: `uv run pytest
 tests/ -v`. De volledige suite hoort groen te zijn.
+
+---
+
+## Acceptatie v0.3 (praktijktests)
+
+De v0.3-vlag vereist de drie flows hierboven op een **verse DB** (zie
+[PLAN.md](PLAN.md) §19). Onderstaande tabel koppelt elk DEMO-scenario aan
+automatische proxy-integratietests en handmatige UI-stappen.
+
+| Scenario | DEMO | Automatisch (`tests/test_proxy.py`) | Handmatig (UI) |
+| --- | --- | --- | --- |
+| 1 — happy path | § Scenario 1 | `test_clean_prompt_roundtrip_pseudonymizes_and_returns_response` | Home Uitgebreid: mapping + audit-tabs |
+| 2 — review 423 | § Scenario 2 | `test_low_confidence_returns_423_and_enqueues_review`, `test_resume_after_accepting_review_succeeds` | Review-queue Accept + hervat-curl |
+| 3 — TWO_WAY mix | § Scenario 3 | `test_two_way_override_depseudonymizes_response` | Opdrachten: NAME override `[2w]` + audit detail |
+
+**Snelle acceptatie-run** (offline, verse tmp-DB per test):
+
+```bash
+uv run pytest tests/test_proxy.py::test_clean_prompt_roundtrip_pseudonymizes_and_returns_response \
+  tests/test_proxy.py::test_low_confidence_returns_423_and_enqueues_review \
+  tests/test_proxy.py::test_resume_after_accepting_review_succeeds \
+  tests/test_proxy.py::test_two_way_override_depseudonymizes_response -v
+```
+
+**Volledige handmatige walkthrough:** start proxy (:8080) + Streamlit (:8501),
+zet `ANTHROPIC_API_KEY`, doorloop Scenario 1–3 met de curl/UI-stappen hierboven.
+Laag 3 (Ollama) is **niet** vereist — default `use_llm=False`.

@@ -267,10 +267,11 @@ def _render_editor() -> None:
             "Laag 3 (lokaal Ollama-LLM) inschakelen",
             value=bool(existing.use_llm) if existing else False,
             help=(
-                "Activeert de optionele derde detectielaag voor product-namen en "
-                "projectcodes via een lokaal Ollama-model (zie .env). Vereist een "
-                "draaiende Ollama-server; bij elke fout valt de pijplijn soft terug "
-                "op alleen regex + DEDUCE. Default uit."
+                "Optioneel/eval: derde detectielaag via lokaal Ollama (product/"
+                "project; NAME experimenteel). Normale NAME-detectie gebruikt "
+                "regex + DEDUCE + rol-heuristiek zonder Ollama. Vereist een "
+                "draaiende Ollama-server; bij falen soft terug op regex + DEDUCE. "
+                "Default uit — zie TESTPLAN.md §8."
             ),
         )
 

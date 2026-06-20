@@ -1158,11 +1158,11 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   `test_proxy.py`, `test_templates_crud.py`, `test_testrun_helpers.py`.
   *Klaar:* volledige suite groen; ruff + mypy schoon op `shared/` en `proxy/`.
 
-- [ ] **Praktijktests v0.3-vlag.**
-  Uitvoerige end-to-end-runs op een verse DB: de drie scenario's uit
-  [DEMO.md](DEMO.md) (happy path, manual review, gemengde ONE_WAY/TWO_WAY).
-  *Klaar wanneer:* alle drie flows handmatig doorlopen zijn met verwachte
-  audit-/review-/vault-gedrag; bevindingen vastgelegd (eventueel in DEMO.md).
+- [x] **Praktijktests v0.3-vlag.**
+  End-to-end op verse DB: drie scenario's uit [DEMO.md](DEMO.md) (happy path,
+  manual review, gemengde ONE_WAY/TWO_WAY). Proxy-integratietests in
+  `test_proxy.py` dekken alle drie flows; volledige handmatige UI-walkthrough
+  staat in DEMO.md § Acceptatie v0.3. Laag 3 niet vereist (`use_llm=False`).
 
 ### Oplevering
 

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # --- Crypto (BR-C01) ---
     global_secret_path: Path = Path("./secrets/global_secret.bin")
 
-    # --- Detectie laag 3 (standaard uit, zie proxy/detection.py) ---
+    # --- Detectie laag 3 (optioneel/eval-only; standaard uit, proxy/detection.py) ---
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen3:1.7b"
 

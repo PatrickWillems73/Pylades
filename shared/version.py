@@ -9,7 +9,7 @@ niet de huidige release.
 
 from __future__ import annotations
 
-__version__ = "0.2.11"
+__version__ = "0.2.12"
 TARGET_VERSION = "0.3.0"
 
 PRODUCT_NAME = "Pylades"

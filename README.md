@@ -1,7 +1,7 @@
-# Pylades v0.2.11
+# Pylades v0.2.12
 
 > Lokale pseudonimiseringsproxy voor extern LLM-gebruik in de zorg.
-> **Huidige release:** v0.2.11 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
+> **Huidige release:** v0.2.12 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
 > **Pylades** is in de Griekse mythologie de trouwe metgezel van Orestes —
 > een archetype van onvoorwaardelijke vriendschap: een metgezel aan wie je
 > alles toevertrouwt.
@@ -31,7 +31,7 @@ Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
 
 ## Status
 
-Pylades v0.2.11 is een **proof of concept** op één persoonlijke machine.
+Pylades v0.2.12 is een **proof of concept** op één persoonlijke machine.
 Productie-inzet op echte zorgdata is **niet** toegestaan zonder formele
 FG/DPO-toetsing. Zie [Productie-disclaimer](#productie-disclaimer-verplicht-lezen)
 hieronder.
@@ -98,7 +98,7 @@ opslag als die ontbreekt.
 
 ## Productie-disclaimer (verplicht lezen)
 
-Pylades v0.2.11 implementeert 12 specifieke business rules uit een
+Pylades v0.2.12 implementeert 12 specifieke business rules uit een
 zorg-georiënteerde functionele specificatie (richting doelversie v0.3), maar is **niet productie-geschikt
 voor zorgdata**. Ontbrekende productie-vereisten zijn onder andere:
 
@@ -134,7 +134,7 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 
 ## Versie
 
-- **Huidige release:** v0.2.11 — enige bron: [`shared/version.py`](shared/version.py)
+- **Huidige release:** v0.2.12 — enige bron: [`shared/version.py`](shared/version.py)
   (sync met `pyproject.toml`; test: `tests/test_version.py`).
 - **Doelversie:** v0.3 (`TARGET_VERSION` in [`shared/version.py`](shared/version.py)).
 - **Spec v0.3:** [PLAN.md](PLAN.md) en [SPEC-v0.3.md](SPEC-v0.3.md).
@@ -149,7 +149,7 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 | UI | Streamlit |
 | Detectie laag 1 | Regex (BSN, e-mail, telefoon, IBAN, …) |
 | Detectie laag 2 | DEDUCE 3.x (NL-medisch; rule-based NER) |
-| Detectie laag 3 | Ollama + `qwen3:1.7b` (optioneel, standaard uit) |
+| Detectie laag 3 | Ollama + `qwen3:1.7b` (optioneel/eval-only; standaard uit) |
 | Pseudonimisering | HMAC-SHA-256, session-key |
 | Content-DB | SQLite (`pylades-content.db`) |
 | Vault-DB | SQLite (`pylades-vault.db`, mode `0o600`) |
@@ -269,12 +269,20 @@ DEDUCE importeerbaar en initialiseerbaar is.
 Optioneel voor **NER-modelvergelijking** in het eval-harnas (spaCy md/lg,
 GLiNER): `uv sync --extra eval` — zie [TESTPLAN.md](TESTPLAN.md).
 
-### 4. Ollama (laag 3, optioneel)
+### 4. Ollama (laag 3, optioneel / eval-only)
 
-Laag 3 staat **standaard uit**. Activeer alleen als je een lokaal LLM wilt
-gebruiken voor jargon- en productnaam-detectie:
+Laag 3 staat **standaard uit**. De productie-pijplijn detecteert NAME via
+regex, DEDUCE en rol-heuristiek (`proxy/role_names.py`); je hoeft Ollama niet
+te installeren voor normaal gebruik.
+
+Laag 3 is bedoeld voor **eval en experiment**: product/project-detectie in het
+eval-harnas ([TESTPLAN.md](TESTPLAN.md) §8, runners `pylades_md_llm`,
+`pylades_md_ollama_mlx`, `pylades_md_mlx`) en optioneel per template via
+`use_llm=True` in Opdrachten. Bij falen valt de pijplijn soft terug op regex +
+DEDUCE.
 
 ```bash
+# Alleen nodig voor laag-3-eval of template-toggle use_llm
 # Installeer Ollama: https://ollama.com/download
 ollama serve            # in eigen terminal laten draaien
 ollama pull qwen3:1.7b  # ~1.4 GB
@@ -405,7 +413,7 @@ Op de Config-pagina staat een rotatie-flow met vijf stappen:
 
 ## Status project (v0.3-spec)
 
-Wat er nu staat (release v0.2.11):
+Wat er nu staat (release v0.2.12):
 
 - Volledige proxy-pipeline: detect → generalize → pseudonymize → Anthropic →
   de-pseudonymize (laag 2: DEDUCE + rol-heuristiek)

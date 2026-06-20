@@ -2,8 +2,11 @@
 
 Volgorde is bewust van hoge naar lage precisie: regex (deterministisch,
 hoge specificiteit, validators voor BSN/IBAN), dan DEDUCE NER (+ rol-heuristiek
-en NAME-span-uitbreiding), dan optioneel Ollama (jargon/productnamen). Latere
-lagen mogen *toevoegen* aan eerdere lagen, nooit *overschrijven*.
+en NAME-span-uitbreiding). Laag 3 (Ollama) is **optioneel** en standaard uit;
+de runtime-pijplijn draait zonder lokale LLM. Laag 3 is primair voor eval
+(TESTPLAN §8, runners `pylades_md_*`) en experimentele product/project/NAME-
+detectie via template-vlag `use_llm`. Latere lagen mogen *toevoegen* aan eerdere
+lagen, nooit *overschrijven*.
 """
 
 from __future__ import annotations
@@ -646,6 +649,8 @@ def detect_deduce_with_status(text: str) -> tuple[list[Entity], LayerStatus]:
     return entities, LayerStatus.OK
 
 
+# Eval/experiment: NAME in dit prompt is geen productie-default; runtime NAME
+# komt uit regex + DEDUCE + role_names.py. Zie TESTPLAN.md §8.
 _LLM_SYSTEM_PROMPT: Final[str] = (
     "Je bent een NER-assistent voor Nederlandse zorgteksten. Identificeer "
     "product-namen (medicijnen, apparaten), project-codes, en persoonsnamen "
@@ -751,7 +756,7 @@ def detect_llm_with_status(
 
 
 def detect_llm(text: str, *, backend: Layer3Backend | None = None) -> list[Entity]:
-    """Laag 3: lokaal LLM voor jargon/productnamen (zie `*_with_status`)."""
+    """Laag 3 (optioneel/eval): lokaal LLM — zie `detect_llm_with_status`."""
     return detect_llm_with_status(text, backend=backend)[0]
 
 
@@ -862,8 +867,8 @@ def detect_all_timed(
 ) -> tuple[DetectionResult, list[LayerTiming]]:
     """Als `detect_all`, maar meet elke laag en levert per-laag-timing.
 
-    - `use_llm=False` (default): alleen regex + DEDUCE; laag 3 krijgt status
-      `DISABLED`.
+    - `use_llm=False` (default, productie): alleen regex + DEDUCE; laag 3 krijgt
+      status `DISABLED`. Zet `use_llm=True` alleen voor eval of experiment.
     - `on_layer`: optionele callback die na elke laag-overgang wordt
       aangeroepen met de timings-tot-nu-toe (incl. een `RUNNING`-entry voor
       de laag die nu draait). Hiermee kan de UI live updaten.
