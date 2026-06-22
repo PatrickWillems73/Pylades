@@ -1,7 +1,7 @@
-# Pylades v0.2.12
+# Pylades v0.3.0
 
 > Lokale pseudonimiseringsproxy voor extern LLM-gebruik in de zorg.
-> **Huidige release:** v0.2.12 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
+> **Huidige release:** v0.3.0 · **doelversie:** v0.3 · zie [PLAN.md](PLAN.md).
 > **Pylades** is in de Griekse mythologie de trouwe metgezel van Orestes —
 > een archetype van onvoorwaardelijke vriendschap: een metgezel aan wie je
 > alles toevertrouwt.
@@ -31,7 +31,7 @@ Twee gescheiden SQLite-databases vormen de kern van de defense-in-depth:
 
 ## Status
 
-Pylades v0.2.12 is een **proof of concept** op één persoonlijke machine.
+Pylades v0.3.0 is een **proof of concept** op één persoonlijke machine.
 Productie-inzet op echte zorgdata is **niet** toegestaan zonder formele
 FG/DPO-toetsing. Zie [Productie-disclaimer](#productie-disclaimer-verplicht-lezen)
 hieronder.
@@ -98,7 +98,7 @@ opslag als die ontbreekt.
 
 ## Productie-disclaimer (verplicht lezen)
 
-Pylades v0.2.12 implementeert 12 specifieke business rules uit een
+Pylades v0.3.0 implementeert 12 specifieke business rules uit een
 zorg-georiënteerde functionele specificatie (richting doelversie v0.3), maar is **niet productie-geschikt
 voor zorgdata**. Ontbrekende productie-vereisten zijn onder andere:
 
@@ -134,7 +134,7 @@ door `original_prompt_hash` voor integriteitsbewijs zonder inhoud.
 
 ## Versie
 
-- **Huidige release:** v0.2.12 — enige bron: [`shared/version.py`](shared/version.py)
+- **Huidige release:** v0.3.0 — enige bron: [`shared/version.py`](shared/version.py)
   (sync met `pyproject.toml`; test: `tests/test_version.py`).
 - **Doelversie:** v0.3 (`TARGET_VERSION` in [`shared/version.py`](shared/version.py)).
 - **Spec v0.3:** [PLAN.md](PLAN.md) en [SPEC-v0.3.md](SPEC-v0.3.md).
@@ -413,7 +413,7 @@ Op de Config-pagina staat een rotatie-flow met vijf stappen:
 
 ## Status project (v0.3-spec)
 
-Wat er nu staat (release v0.2.12):
+Wat er nu staat (release v0.3.0):
 
 - Volledige proxy-pipeline: detect → generalize → pseudonymize → Anthropic →
   de-pseudonymize (laag 2: DEDUCE + rol-heuristiek)

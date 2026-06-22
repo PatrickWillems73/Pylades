@@ -117,7 +117,11 @@ ICD-10, buitenlandse namen, typo's/OCR-ruis, hoge entity-dichtheid.
 **Privacy:** 100% fictief; alle BSN's elfproef-geldig maar niet-bestaand;
 expliciet vastgelegd voor de FG.
 
-**Omvang:** gefaseerd ~150 (snel itereren) → ~600 (statistisch robuuster).
+**Omvang:** twee gepinde sets, samen ~600 — een **dev-set** van 150 dossiers
+(`eval/datasets/synthetic/`, seed 1) voor snel itereren, en een **holdout-set**
+van 450 dossiers (`eval/datasets/synthetic-holdout/`, seed 2) voor een
+robuustere, niet-getunede meting. De pytest-gate (§12) draait op de dev-set;
+de holdout is bewust niet gebruikt om drempels op te tunen.
 
 **Versiebeheer:** datasets onder `eval/datasets/<naam>/` met een **manifest**
 (versietag + sha256-checksum + seed + generator-info). Eén map kan meerdere
@@ -164,7 +168,7 @@ en `dataset-10dossiers.jsonl` niet door elkaar lopen. De dataset wordt **gepind*
 | DEDUCE 3.0 (`vmenger/deduce`) — **runtime baseline** | rule-based NL-medisch | transparant/auditeerbaar, NL-zorgcontext; geïntegreerd via `uv sync` | mist nieuwe patronen; overlapt regex-laag |
 | spaCy `nl_core_news_lg` (eval-runner `pylades_lg`) | CNN | betere dekking generieke NER, CPU/snel | generieke labels; geen echte confidence |
 | spaCy `nl_core_news_md` (eval-only) | CNN | licht | generieke labels; geen echte confidence |
-| GLiNER2-PII (multilingual) | zero-shot transformer | SOTA span-F1 op PII, 42 types incl. NL, configureerbaar, echte confidences, CoreML; **vult de transformer-rol** | lagere precisie OOD (overpredictie namen); zwaar (RAM) |
+| GLiNER multi-PII (`urchade/gliner_multi_pii-v1`) | zero-shot transformer | sterke span-F1 op PII, brede PII-typedekking (adapter beperkt tot NAME/ORG/LOCATION), echte confidences; **vult de transformer-rol** | lagere precisie OOD (overpredictie namen); zwaar (RAM) |
 
 **Geen `nl_core_news_trf`.** Explosion publiceert voor Nederlands alleen
 `sm`/`md`/`lg` ([spacy.io/models/nl](https://spacy.io/models/nl)); er is geen
@@ -275,6 +279,7 @@ eval/
 tests/
   test_eval_scoring.py   unit-tests op de scoring-functies
   test_eval_gates.py     drempels (leak-rate 0 direct-ids; zie §12)
+  test_eval_generalization.py  generalisatie-score (BR-B01..B05)
   test_eval_cli.py       CLI smoke
   test_eval_ner.py       NER-adapters
   test_eval_report.py    rapportage
@@ -305,15 +310,17 @@ tests/
 | --- | --- | --- |
 | 0 | Dit document + label-schema + acceptatiedrempels | ✅ af |
 | 1 | Dataset v1 (~150) genereren, valideren, pinnen | ✅ af (`eval/datasets/synthetic/`) |
+| 1b | Holdout-set (450) genereren, valideren, pinnen | ✅ af (`eval/datasets/synthetic-holdout/`) |
 | 2 | Scoring-engine + baseline-rapport (`md`) + pytest leak-gate | ✅ af |
 | 3 | Adapters NER (md/lg/GLiNER/DEDUCE) → vergelijkend rapport | ✅ af |
 | 4 | Laag-3 lokale-LLM-benchmark | 🟡 backends + runners; systematische benchmark open |
-| 5 | Oracle/judge + triage → bug-backlog; opschalen naar ~600 | ❌ open |
+| 5 | Oracle/judge + triage → bug-backlog; opschalen naar ~600 | 🟡 holdout-set (450, `synthetic-holdout`) gepind → ~600 totaal; judge/triage open |
 | 6 | FG-auditrapport + restrisico-register + CI-integratie | 🟡 CI-gates af; FG-deliverables open |
 
 ## 12. Gekozen defaults
 
-- Datasetomvang: gefaseerd 150 → 600 (150 gepind; 600 nog te genereren).
+- Datasetomvang: 150 dev-set (`synthetic`) + 450 holdout (`synthetic-holdout`)
+  gepind, ~600 totaal. De gate draait op de dev-set; de holdout is held-out.
 - **Privacy-gate (formeel):** 0 lekken voor `DIRECT_IDENTIFIER` op de
   **normal-subset** (`difficulty == "normal"`); adversarial alleen rapporteren
   in vergelijkingsrapporten.
@@ -339,7 +346,8 @@ Laatste update: juni 2026. Dit hoofdstuk volgt de voortgang t.o.v. §1–§12.
 ### Afgerond
 
 - CLI: `eval.py` (`bootstrap`, `generate`, `validate`, `run`, `compare`, `runners`).
-- Gepinde datasets: bootstrap (10), synthetic (150), manifest + sha256.
+- Gepinde datasets: bootstrap (10), synthetic (150, dev-set),
+  synthetic-holdout (450), elk met manifest + sha256.
 - Scoring, rapporten (JSON/CSV/HTML), vergelijkend rapport, warm-up-latency.
 - NER-runners: `pylades_deduce_runtime`, `pylades_lg`, `pylades_gliner`, `pylades_deduce`.
 - DEDUCE-pijplijn: rol-context-heuristiek ([proxy/role_names.py](proxy/role_names.py)),
@@ -351,7 +359,8 @@ Laatste update: juni 2026. Dit hoofdstuk volgt de voortgang t.o.v. §1–§12.
 ### Nog open (prioriteit)
 
 1. ~~**Generalisatie-score**~~ — af (`eval/metrics/generalization.py`).
-2. **Dataset ~600** — genereren, valideren, pinnen; opnieuw triageren.
+2. ~~**Dataset ~600 genereren/valideren/pinnen**~~ — af (holdout 450,
+   `synthetic-holdout`); **opnieuw triageren** op de holdout blijft open.
 3. **`eval/judge/`** — oracle/judge op steekproef (§3).
 4. **`eval/triage/`** — failure-clustering → bugrapporten (§3).
 5. **Verificatie-pijplijn** — tweede LLM-pass + mens-review (§5 stap 4).

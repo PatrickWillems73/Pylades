@@ -239,7 +239,7 @@ def _render_editor() -> None:
             "LLM provider", value=(existing.llm_provider if existing else "anthropic")
         )
         llm_naam = st.text_input(
-            "LLM model", value=(existing.llm_naam if existing else "claude-opus-4-7")
+            "LLM model", value=(existing.llm_naam if existing else "claude-opus-4-8")
         )
         prompt_tekst = st.text_area(
             "Opdracht-template",

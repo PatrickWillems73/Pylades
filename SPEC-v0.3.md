@@ -9,6 +9,16 @@
 >   aparte **Status**-pagina.
 > - Het hervat-pad gebruikt het **body-veld `resume_session`** in plaats van
 >   de header `X-Pylades-Resume-Session` (zie PLAN §15a).
+> - Detectielaag 2 draait runtime op **DEDUCE** (`DetectionLayer.DEDUCE`);
+>   spaCy is alleen eval/benchmark (`--extra eval`). De `threshold_spacy_*`-
+>   config-keys blijven als legacy-namen in gebruik voor NAME/ORG/LOCATION.
+> - De proxy heeft extra modules naast deze spec: `templates.py` (CRUD),
+>   `deduce_layer.py` (laag 2) en `name_spans.py` + `role_names.py`
+>   (NL-naam/rol-heuristiek); `shared/` heeft daarnaast `version.py`.
+> - `Template` heeft drie extra velden: `max_tokens`, `use_llm` en
+>   `sort_order` (zie PLAN §15a).
+> - De vault-tabel `mappings` gebruikt `UNIQUE(session_id, original,
+>   entity_type)` en heeft een extra kolom `generalized_to`.
 
 ---
 
@@ -83,7 +93,8 @@ niet tegen diefstal van de audit-database zelf. In v1.0 wordt
 - Drie detectielagen: regex, DEDUCE 3.x (NL-medisch NER), lokaal LLM via Ollama
   (`qwen3:1.7b`) — laag 3 **standaard uit**, optioneel aan
 - Pseudoniem-generatie via HMAC-SHA-256 (BR-C01)
-- Vijf UI-pagina's: Templates, Testruns, Review Queue, Audit, Config
+- UI-pagina's: Home (testrun-flow), Status, Opdrachten (voorheen "Templates"),
+  Review Queue, Audit, Config
 - Generaliseringspipeline naast pseudonimisering (BR-B01-B05)
 - Twee gescheiden SQLite-databases (BR-G02)
 - **Super-default pseudonimiseringsmodus**: `one_way`
@@ -129,6 +140,10 @@ niet tegen diefstal van de audit-database zelf. In v1.0 wordt
 
 ## Bestandsstructuur
 
+> Bijgewerkt naar de gebouwde structuur. De UI-pagina's leven onder
+> `ui/views/` (entry `ui/Home.py`); de proxy/UI hebben extra hulpmodules
+> die in de oorspronkelijke spec nog niet voorzien waren.
+
 ```
 pylades/
 ├── pyproject.toml
@@ -139,21 +154,38 @@ pylades/
 │   └── .gitkeep                    # bevat runtime de HMAC-sleutel
 ├── pylades-content.db               # runtime, niet in git
 ├── pylades-vault.db                 # runtime, niet in git
+├── scripts/
+│   └── pylades_services.py         # start/stop/restart proxy + UI
 ├── proxy/
 │   ├── __init__.py
 │   ├── main.py                     # FastAPI app entrypoint
 │   ├── detection.py                # drielaagse detectie (BR-A01, A02, A04)
+│   ├── deduce_layer.py             # laag 2: DEDUCE NL-medische NER
+│   ├── name_spans.py               # NL-naam-spanheuristiek
+│   ├── role_names.py               # rol-/naam-heuristiek
 │   ├── generalization.py           # generalisering (BR-B01-B05)
 │   ├── pseudonymization.py         # HMAC-pseudoniemen (BR-C01, C06)
 │   ├── mapping.py                  # PseudonymManager + vault-access (BR-G02)
 │   ├── review.py                   # manual review queue (BR-A04)
-│   └── audit.py                    # content-logging (BR-G01)
+│   ├── audit.py                    # content-logging (BR-G01)
+│   └── templates.py                # template-CRUD (content-db)
 ├── ui/
 │   ├── __init__.py
-│   ├── Home.py                     # Streamlit hoofdpagina
-│   └── pages/
-│       ├── 1_Templates.py
-│       ├── 2_Testruns.py
+│   ├── Home.py                     # entry: bootstrap, navigatie, theme + testrun-flow
+│   ├── app.py                      # compat-shim voor `streamlit run ui/app.py`
+│   ├── status.py                   # status-checks (proxy/ollama/deduce/db)
+│   ├── theme.py                    # kleur-/CSS-thema
+│   ├── ui_extras.py                # gedeelde UI-shell (init_pylades_ui)
+│   ├── navigation.py
+│   ├── testrun_helpers.py          # fill_input + analyze_prompt
+│   ├── audit_format.py
+│   ├── review_flow.py / review_queue_helpers.py / review_snippet.py
+│   ├── sidebar_state.py / cookies.py / favicon_sync.py
+│   ├── assets/                     # logo.png, favicon.png
+│   └── views/
+│       ├── 0_Home.py
+│       ├── 1_Status.py
+│       ├── 2_Opdrachten.py         # voorheen "Templates"
 │       ├── 3_Review_Queue.py
 │       ├── 4_Audit.py
 │       └── 5_Config.py
@@ -162,20 +194,16 @@ pylades/
 │   ├── config.py                   # pydantic-settings
 │   ├── db.py                       # twee connection helpers (content, vault)
 │   ├── models.py                   # Pydantic datamodellen + Enums
-│   └── crypto.py                   # HMAC-helpers (BR-C01)
+│   ├── crypto.py                   # HMAC-helpers (BR-C01)
+│   └── version.py                  # enige bron van waarheid voor de versie
 ├── data/
 │   ├── __init__.py
 │   ├── fixtures.py                 # fictieve testdata
 │   └── icd10_rare.py               # set van zeldzame codes voor BR-B05
-└── tests/
-    ├── __init__.py
-    ├── test_detection.py
-    ├── test_generalization.py
-    ├── test_pseudonymization.py
-    ├── test_mapping.py
-    ├── test_review.py
-    ├── test_db_separation.py
-    └── test_proxy.py
+└── tests/                          # o.a. test_detection / _generalization /
+    │                               # _pseudonymization / _mapping / _review /
+    │                               # _db_separation / _proxy / _audit / _version
+    └── __init__.py
 ```
 
 ---
@@ -264,6 +292,9 @@ ENTITY_CATEGORY_MAP: dict[EntityType, EntityCategory] = {
     EntityType.AGE:               EntityCategory.QUASI_IDENTIFIER,
     EntityType.ORG:               EntityCategory.QUASI_IDENTIFIER,
     EntityType.LOCATION:          EntityCategory.QUASI_IDENTIFIER,
+    EntityType.ADMISSION_DATE:    EntityCategory.QUASI_IDENTIFIER,
+    EntityType.DISCHARGE_DATE:    EntityCategory.QUASI_IDENTIFIER,
+    EntityType.EXAM_DATE:         EntityCategory.QUASI_IDENTIFIER,
     EntityType.ICD10_CODE:        EntityCategory.CLINICAL_SENSITIVE,
     EntityType.DIAGNOSIS:         EntityCategory.CLINICAL_SENSITIVE,
     EntityType.PRODUCT:           EntityCategory.FREE_TEXT,
@@ -342,7 +373,7 @@ CREATE TABLE review_queue (
     proposed_category TEXT NOT NULL,
     confidence REAL NOT NULL,
     detection_layer TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PENDING',
+    status TEXT NOT NULL DEFAULT 'pending',
     user_decision_entity_type TEXT,
     user_decision_at TEXT,
     user_decision_note TEXT,
@@ -543,6 +574,8 @@ def make_pseudonym(session_key: bytes, original: str, entity_type: str) -> str:
 | BIRTHDATE | BDT | DISCHARGE_DATE | DCH |
 | BIRTH_YEAR | BYR | PRODUCT | PRD |
 | AGE | AGE | PROJECT | PRJ |
+| ADDRESS | ADR | DIAGNOSIS | DGN |
+| EXAM_DATE | EXM | | |
 
 **Acceptatiecriterium.**
 1. Pseudoniem-format `[XXX-aaaaaa]` (drie letters, streepje, 6 hex chars)
@@ -718,9 +751,10 @@ CREATE TABLE mappings (
     pseudonymization_mode TEXT NOT NULL,    -- one_way | two_way (per entity)
     confidence REAL NOT NULL,
     detection_layer TEXT NOT NULL,
+    generalized_to TEXT,                    -- gegeneraliseerde vorm (BR-B), indien van toepassing
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(session_id, pseudonym),
-    UNIQUE(session_id, original)
+    UNIQUE(session_id, original, entity_type)
 );
 
 CREATE INDEX idx_mappings_session ON mappings(session_id);
@@ -769,14 +803,19 @@ Enums:
   PRODUCT, PROJECT
 - `EntityCategory` — DIRECT_IDENTIFIER, QUASI_IDENTIFIER, FREE_TEXT,
   CLINICAL_SENSITIVE
-- `DetectionLayer` — REGEX, SPACY, LLM
+- `DetectionLayer` — REGEX, SPACY, DEDUCE, LLM (runtime laag 2 = DEDUCE;
+  SPACY blijft als eval/benchmark-waarde)
 - `ReviewStatus` — PENDING, ACCEPTED, REJECTED, MODIFIED
 - `PseudonymizationMode` — ONE_WAY, TWO_WAY
 
 Pydantic v2 modellen:
 - `Template` met velden: `id`, `groep`, `naam`, `beschrijving`,
-  `llm_provider`, `llm_naam`, `prompt_tekst`, `default_mode: str | None`,
-  `mode_overrides: dict[str, str]`, `two_way_justification: str | None`
+  `llm_provider`, `llm_naam`, `prompt_tekst`, `max_tokens: int`,
+  `use_llm: bool`, `default_mode: PseudonymizationMode | None`,
+  `mode_overrides: dict[EntityType, PseudonymizationMode]`,
+  `two_way_justification: str | None`, `sort_order: int` (zie PLAN §15a voor
+  `max_tokens`/`use_llm` en de verplichte `{input}`-placeholder in
+  `prompt_tekst`)
 - `Entity` met velden: `original`, `entity_type`, `category`, `confidence`,
   `detection_layer`, `pseudonym`, `start`, `end`, `generalized_to: str | None`,
   `effective_mode: PseudonymizationMode`

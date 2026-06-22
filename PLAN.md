@@ -1,6 +1,6 @@
 # Pylades — Architectuurplan (doel: v0.3)
 
-> **Huidige release:** v0.2.2 (`shared/version.py`) · **Doelversie:** v0.3 (deze
+> **Huidige release:** v0.3.0 (`shared/version.py`) · **Doelversie:** v0.3 (deze
 > spec). Bron-spec en business rules: [SPEC-v0.3.md](SPEC-v0.3.md).
 > **Status repo:** Stappen 1–17 geïmplementeerd (zie §19 en §20). Start met
 > `uv run python scripts/pylades_services.py restart` (proxy `:8080`, UI `:8501`).
@@ -9,7 +9,7 @@
 
 ## 1. Wat we bouwen, in één paragraaf
 
-Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.2.2**,
+Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.3.0**,
 richting doel **v0.3**) die op het pad `POST /v1/messages` een eigen
 body-contract aanbiedt (zelfde pad als Anthropic, maar geen pass-through),
 plus een Streamlit-beheer-UI. De proxy
@@ -121,9 +121,12 @@ maken levensduur expliciet en sluiten netjes bij exceptions.
 
 ## 4. Modulegrenzen in `proxy/` — waar lopen ze, waarom precies daar?
 
-De proxy heeft zeven modules. Elk hokje heeft één verantwoordelijkheid die
-niet samenvalt met de buren — wat eruit gaat is het input-type voor het
-volgende.
+De proxy heeft zeven **kern**modules in de request-flow (zie diagram). Elk
+hokje heeft één verantwoordelijkheid die niet samenvalt met de buren — wat
+eruit gaat is het input-type voor het volgende. Daarnaast zijn er enkele
+**hulpmodules** die later zijn toegevoegd: `templates.py` (template-CRUD op de
+content-db), `deduce_layer.py` (laag 2: DEDUCE) en `name_spans.py` +
+`role_names.py` (NL-naam/rol-heuristiek rond de DEDUCE-laag).
 
 ```mermaid
 flowchart LR
@@ -523,12 +526,15 @@ zonder inhoud.
 sterker klinkt dan hij is, is gevaarlijker dan een eerlijk gedeclareerde
 beperking. Het hoort verplicht in README per BR.
 
-### `mappings` met `UNIQUE(session_id, pseudonym)` én `UNIQUE(session_id, original)`
+### `mappings` met `UNIQUE(session_id, pseudonym)` én `UNIQUE(session_id, original, entity_type)`
 
 **Waarom twee unique constraints.** De eerste voorkomt collisions in de
 6-hex-character pseudoniem-ruimte binnen één sessie (zie risico-register).
-De tweede voorkomt dubbele entries voor hetzelfde origineel — twee
-inserts van dezelfde "Jan" in één sessie moeten één mapping zijn, niet twee.
+De tweede voorkomt dubbele entries voor hetzelfde origineel-per-type — twee
+inserts van dezelfde "Jan" als `NAME` in één sessie moeten één mapping zijn,
+niet twee. Het `entity_type` zit bewust in de sleutel: alleen wanneer hetzelfde
+oppervlak terugkomt als een *ander* type ontstaat een aparte rij (en dus een
+apart pseudoniem-prefix).
 
 **Consequentie van weglaten.** Zonder de tweede constraint bouwen we
 sluipsgewijs een N-op-1-relatie waar de code een 1-op-1 verwacht; bij
@@ -788,7 +794,7 @@ dan een mix van body + `Header(...)`-parameters.
 
 | Conditie | Status |
 |---|---|
-| Body-JSON kapot | 400 |
+| Body-JSON kapot | 422 (Pydantic/JSON-decode) |
 | `template_id` / `dossier` ontbreekt of leeg | 422 (Pydantic) |
 | `template_id` niet in DB | 404 |
 | Template-`prompt_tekst` leeg of zonder `{input}` | 500 (DB-validator hoort dit te voorkomen) |
@@ -965,9 +971,9 @@ doen, niet alleen dat we het later doen.
 
 ## 19. Status nu, eerstvolgende stap
 
-**Stappen 1–17 (klaar).** Release **v0.2.2** — scaffold, `shared/`, DB-laag, testdata, volledige
+**Stappen 1–17 (klaar).** Release **v0.3.0** — scaffold, `shared/`, DB-laag, testdata, volledige
 proxy-pijplijn, alle UI-pagina's, het v0.3 API-contract (§15a) en UI-shell
-(logo/favicon, theme). **216 tests** groen (canonieke teststand voor dit document).
+(logo/favicon, theme). **403 tests** groen (canonieke teststand voor dit document).
 `uv run pytest`, `uv run ruff check .`
 en mypy op `shared/` + `proxy/` zijn schoon. Services:
 `uv run python scripts/pylades_services.py restart`.
@@ -1107,7 +1113,7 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   via `ON DELETE SET NULL` zodat verwijderen geen audit-rijen breekt
   (BR-G01). 125 tests groen (2 skips: spaCy).
   *Stap 17 (§15a):* `{input}`-validator, `max_tokens`, toggle `use_llm`,
-  Max-tokens-invoerveld, standaard-LLM `claude-opus-4-7`.
+  Max-tokens-invoerveld, standaard-LLM `claude-opus-4-8`.
 
 - [x] **Stap 13 — Config-pagina.**
   `ui/views/5_Config.py` rendert threshold-sliders, generalisering-
@@ -1171,7 +1177,7 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   vastgelegd in [DEMO.md](DEMO.md) — clean round-trip, manual review,
   en gemengde ONE_WAY/TWO_WAY-overrides. v1.0 roadmap in
   [README.md](README.md) is eind-gecontroleerd en gespiegeld aan de
-  buiten-scope-lijst hieronder. Testsuite-stand (release v0.2.2):
+  buiten-scope-lijst hieronder. Testsuite-stand (release v0.3.0):
   volledige suite groen (exact aantal in §19). Mypy schoon, ruff schoon.
 
   Project-tree (broncode-bestanden):
@@ -1203,12 +1209,15 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   ├── proxy/
   │   ├── __init__.py
   │   ├── audit.py
+  │   ├── deduce_layer.py
   │   ├── detection.py
   │   ├── generalization.py
   │   ├── main.py
   │   ├── mapping.py
+  │   ├── name_spans.py
   │   ├── pseudonymization.py
   │   ├── review.py
+  │   ├── role_names.py
   │   └── templates.py
   ├── secrets/
   │   └── .gitkeep

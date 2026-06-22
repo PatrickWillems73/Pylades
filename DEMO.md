@@ -8,9 +8,13 @@ clean round-trip, manual review, en gemengde modus-overrides. Geschreven
 voor iemand die de proxy lokaal draait en voor het eerst wil bekijken
 wat Pylades doet.
 
-> Voorwaarde: `uv sync --extra dev` is uitgevoerd, `ANTHROPIC_API_KEY`
+> **Voorwaarden:** `uv sync --extra dev` is uitgevoerd, `ANTHROPIC_API_KEY`
 > staat in `.env`, en DEDUCE is beschikbaar (standaard via `uv sync`).
-> Volg `README.md` § Installatie als dit nog niet klopt.
+> Volg [README.md](README.md) § Installatie als dit nog niet klopt.
+>
+> **Opdrachten:**
+> Maak minimaal één opdracht op **Opdrachten** (met `{input}` in de
+> opdrachttekst) vóór je Scenario 1 start, of gebruik een bestaande rij.
 
 ## 0. Start
 
@@ -24,36 +28,46 @@ uv run uvicorn proxy.main:app --port 8080
 uv run streamlit run ui/Home.py
 ```
 
-Open <http://localhost:8501> in een browser. Je landt
-direct op de testrun-pagina (Home). Controleer dat alle vier
-status-kaartjes op de **Status**-pagina (menu-optie 2) groen staan
-(proxy, Ollama-optioneel, DEDUCE, databases).
+Op macOS: **`pylades.command`** (dubbelklik). Op Windows: **`pylades.cmd`**
+(dubbelklik). Of platform-onafhankelijk:
+`uv run python scripts/pylades_services.py restart` — zie
+[README.md](README.md).
+
+Open <http://localhost:8501> in een browser. Je landt op **Home**
+(testrun). Controleer op **Status** (sidebar):
+
+| Kaart | Vereist voor demo? |
+| --- | --- |
+| Proxy | **Ja** — groen |
+| DEDUCE | **Ja** — groen |
+| Databases | **Ja** — groen |
+| Ollama | **Nee** — rood is OK (laag 3 staat default uit; `use_llm=False`) |
 
 ---
 
 ## Scenario 1 — Clean round-trip
 
-**Doel.** Eén request met een BSN doorvoeren zonder dat er review-items
-ontstaan en zien dat de response gewoon terugkomt met pseudoniemen
-op de plek waar de BSN stond.
+**Doel.** Eén request met een BSN doorvoeren zonder review-items en zien
+dat de response terugkomt met pseudoniemen op de plek waar de BSN stond
+(super-default `ONE_WAY` — geen terugvertaling in de response).
 
 ### Via de UI (Compact)
 
-1. Open **Home**. De testrun-pagina is de homepagina; het
-   statusoverzicht staat onder menu-optie **Status**.
-2. Bovenaan staat een modus-schakelaar: **Compact** is default,
-   **Uitgebreid** toont alle diagnostics (curl, raw upstream-body,
-   mapping-tabel, JSON-response).
-3. Kies template id `1` (de seed-template uit `data/fixtures.py` voldoet
-   met `"Vat dit patiëntdossier samen: {input}"`).
-4. Plak in het dossier-veld:
+1. Open **Home**. Bovenaan: modus **Compact** (default) of **Uitgebreid**
+   (curl, raw upstream-body, mapping-tabel, JSON-response).
+2. Kies een opdracht in de radio-lijst (`groep · naam`; in Uitgebreid ook
+   `id=…`). De opdrachttekst moet `{input}` bevatten.
+3. Plak in het dossier-veld bijvoorbeeld:
    `"Patiënt heeft BSN 123456782 en woont op 1011AB."`
-5. Klik **Start** (veilige voorbeeld-analyse — er gaat nog
-   niets richting het externe LLM).
-6. Lees de samenvattingskaart en de entiteit-kaartjes. Klik daarna
-   bewust **Verstuur naar extern LLM**.
+   (zelfde BSN als in `data/fixtures.py` → `VALID_BSN`.)
+4. Klik **Start** — dry-run: detectie + preview, **geen** upstream-call,
+   **geen** audit-write.
+5. Controleer entiteit-kaartjes (BSN, postcode). Klik **Verstuur naar
+   extern LLM**.
 
 ### Via curl
+
+Gebruik het `template_id` van jouw opdracht (niet per se `1`):
 
 ```bash
 curl -sS -X POST http://localhost:8080/v1/messages \
@@ -64,38 +78,37 @@ curl -sS -X POST http://localhost:8080/v1/messages \
   }' | jq .
 ```
 
+Vervang `template_id` als jouw opdracht een ander id heeft.
+
 ### Wat je ziet
 
-- HTTP 200, response-header `X-Pylades-Session: <uuid-hex>`.
-- De response-body bevat de assistant-tekst van Claude. Omdat het
-  template de super-default `ONE_WAY` gebruikt, blijven pseudoniemen als
-  `[BSN-abc123]` en `[PC6-de4567]` in de response staan; Pylades vertaalt
-  ze niet terug.
+- HTTP **200**, response-header `X-Pylades-Session: <uuid-hex>`.
+- Response-body: assistant-tekst van Claude. Met super-default `ONE_WAY`
+  blijven pseudoniemen als `[BSN-xxxxxx]` en `[PC6-xxxxxx]` in de
+  response staan (6 hex-tekens na het streepje).
 
 ### Bevestig in de UI
 
-1. Open **Audit**. Bovenaan staat de zojuist binnengekomen rij met
-   status `ok`.
-2. Klik in het detail-overzicht op het entry-id. De vier tabs tonen:
-   - **Origineel** — je samengestelde opdracht (template-opdracht +
-     dossier) met BSN en postcode plaintext.
-   - **Pseudonimized** — dezelfde tekst, maar BSN en PC6 vervangen door
-     pseudoniemen.
-   - **Response (pseud)** — wat Claude letterlijk terugschreef.
-   - **Response (terug)** — identiek aan "pseud" (geen TWO_WAY in dit
-     template, dus niets om terug te vertalen).
-3. Op **Home** (Uitgebreid) zie je dezelfde mapping-tabel met de twee
-   entiteiten en `[1w]`-badge, plus de curl-equivalent en de raw
-   upstream-body die naar het externe LLM ging.
+1. Open **Audit**. De nieuwste rij heeft status **ok** (geen upstream-fout).
+2. Detail → vier tabs:
+   - **Origineel** — samengestelde opdracht (template + dossier), plaintext
+     PII (BR-G01).
+   - **Pseudonimized (naar LLM)** — wat upstream ontving.
+   - **Response (pseud)** — ruwe upstream-response (JSON).
+   - **Response (terug)** — na TWO_WAY-terugvertaling; hier gelijk aan
+     pseud (geen TWO_WAY op dit template).
+3. Op **Home** (Uitgebreid): mapping-tabel met `[1w]`-badges, curl-equivalent
+   en raw upstream-body.
 
 ---
 
 ## Scenario 2 — Manual review via 423-flow
 
-**Doel.** Laat detectie expres twijfelen door een naam zonder context,
-los het op via de Review-queue, hervat de sessie.
+**Doel.** HTTP **423** wanneer detectie entiteiten onder de confidence-
+threshold zet; beslissing in de review-queue; hervatten met
+`resume_session` in de body.
 
-### Stuur een twijfelachtige opdracht
+### API-contract (curl)
 
 ```bash
 curl -i -X POST http://localhost:8080/v1/messages \
@@ -106,10 +119,10 @@ curl -i -X POST http://localhost:8080/v1/messages \
   }'
 ```
 
-### Wat je ziet
+Bij twijfel detectie:
 
 - HTTP **423 Locked**.
-- Response-body:
+- Body (voorbeeld):
   ```json
   {
     "session_id": "<hex>",
@@ -120,19 +133,29 @@ curl -i -X POST http://localhost:8080/v1/messages \
   }
   ```
 
-Noteer het `session_id`.
+Noteer `session_id`. Open de queue via sidebar **Review Queue**, of deeplink
+`http://localhost:8501/Review_Queue?session=<hex>` (Streamlit leest
+`?session=`; het API-veld `review_url` is een legacy pad-hint).
+
+> **Let op (handmatige demo):** met de huidige NAME-detectie (DEDUCE +
+> rol-heuristiek) levert dit dossier vaak **HTTP 200** i.p.v. 423 — de
+> naam wordt met hoge confidence herkend. Het 423-contract blijft gedekt
+> door `tests/test_proxy.py` (gemockte lage confidence). Voor een
+> handmatige 423-run: gebruik **Home → Start** met een dossier waar de
+> dry-run **twijfel-entiteiten** toont, klik **Open openstaande
+> beslissingen**, beslis in de queue, en hervat daarna via curl of
+> **Hervat naar extern LLM**.
 
 ### Beslis in de UI
 
-1. Open **Review-queue**. De sessie staat bovenaan met "1 openstaand".
-2. Selecteer hem, lees de snippet met `Pietersen` in oranje.
-3. Klik **Accept** (of **Modify** als je het type wilt wijzigen, of
-   **Reject** als het géén PII is).
-4. De pagina toont nu het Hervat-paneel met een JSON-snippet:
+1. Open **Review Queue**. Kies de sessie (`… (1 openstaand)`).
+2. Lees de snippet; pending match is gemarkeerd in oranje.
+3. **Accept**, **Modify** (ander type) of **Reject**.
+4. Na accept/modify/reject van alle items: **Hervat sessie**-paneel met JSON:
    ```json
    {
      "template_id": 1,
-     "dossier": "Vraag van Pietersen: kan dit door?",
+     "dossier": "…",
      "resume_session": "<hex>"
    }
    ```
@@ -149,34 +172,32 @@ curl -sS -X POST http://localhost:8080/v1/messages \
   }' | jq .
 ```
 
-Nu antwoordt de proxy met HTTP 200 en de geaccepteerde naam is in de
-upstream opdracht vervangen door `[PER-xxxxxx]`. In **Audit** verschijnt
-een rij met status `ok` en hetzelfde `session_id` als de eerste 423-call.
+- HTTP **200**; geaccepteerde entiteiten staan als `[PER-xxxxxx]` upstream.
+- **Audit:** de **eerste** 423-call schrijft **geen** audit-rij. Pas na
+  succesvolle hervat (of upstream-fout na review) verschijnt een rij met
+  status **ok** (of **error** bij upstream-fout) en hetzelfde `session_id`.
 
 ---
 
 ## Scenario 3 — Mixed ONE_WAY / TWO_WAY-overrides
 
-**Doel.** Een template waarin alleen `NAME` als TWO_WAY is geconfigureerd
-en al het andere ONE_WAY blijft. Demonstreert selectieve
-de-pseudonimisering: de naam komt netjes terug in de response, het BSN
-blijft als pseudoniem staan.
+**Doel.** Alleen `NAME` als `TWO_WAY`; rest blijft `ONE_WAY`. Naam komt
+terug in de response; BSN blijft pseudoniem.
 
 ### Maak het template aan via de UI
 
-1. Open **Opdrachten** → tab **Bewerken**, kies **+ Nieuwe opdracht**.
+1. **Opdrachten** → tab **Bewerken** → **+ Nieuwe opdracht**.
 2. Vul in:
    - Groep: `demo`
    - Naam: `mixed-overrides`
-   - Provider: `anthropic`, Model: `claude-opus-4-7`
+   - Provider: `anthropic`, Model: `claude-opus-4-8` (UI-default)
    - Opdrachttekst: `Vat de zin samen: {input}`
    - Max tokens: `256`
-   - Template-default modus: laat leeg (→ super-default ONE_WAY).
-   - In de overrides-tabel: zet rij `NAME` op **TWO_WAY**.
+   - Template-default modus: leeg (→ super-default ONE_WAY)
+   - Overrides: rij `NAME` → **TWO_WAY**
    - Two-way-onderbouwing: `Naam mag in dialoog terugkomen omdat de
      gebruiker dezelfde persoon meerdere keren noemt.`
-3. Klik **Opslaan**. Noteer het toegekende `id` (zichtbaar in de
-   overzichts-tab).
+3. **Opslaan**. Noteer `id` (overzicht-tab of Uitgebreid op Home).
 
 ### Stuur de opdracht
 
@@ -191,18 +212,14 @@ curl -sS -X POST http://localhost:8080/v1/messages \
 
 ### Wat je ziet
 
-Audit-detail laat exact zien wat er gebeurt:
+Audit-detail:
 
-- **Pseudonimized (naar LLM)** — `Mevrouw [PER-xxxxxx] (BSN [BSN-yyyyyy])
-  belt over haar afspraak.`
-- **Response (pseud)** — Claude antwoordt met `Mevrouw [PER-xxxxxx] …
-  [BSN-yyyyyy] …`.
-- **Response (terug)** — exact dezelfde tekst, maar `[PER-xxxxxx]` is
-  terugvertaald naar **Pietersen**; de BSN blijft als pseudoniem staan.
+- **Pseudonimized (naar LLM)** — `Mevrouw [PER-xxxxxx] (BSN [BSN-yyyyyy]) …`
+- **Response (pseud)** — Claude gebruikt dezelfde pseudoniemen.
+- **Response (terug)** — `[PER-xxxxxx]` → **Pietersen**; BSN blijft
+  `[BSN-yyyyyy]`.
 
-Op **Home** (Uitgebreid) toont de mapping-tabel de twee entiteiten
-met `[2w]` op `NAME` en `[1w]` op `BSN` — bewijs dat de drie-laagse
-resolver de per-entity override correct toepaste boven super-default.
+Op **Home** (Uitgebreid): mapping `[2w]` op `NAME`, `[1w]` op `BSN`.
 
 ---
 
@@ -211,29 +228,28 @@ resolver de per-entity override correct toepaste boven super-default.
 | Aspect | Scenario | Hoe je het ziet |
 | --- | --- | --- |
 | Pseudonimisering happy-path | 1 | Origineel ≠ Pseudonimized in audit |
-| Review-routing bij lage confidence | 2 | HTTP 423 + manual decision + resume |
+| Review-routing bij lage confidence | 2 | HTTP 423 + queue + resume (contract; zie pytest) |
 | Drie-laagse modus-resolutie | 3 | `[2w]` op één type, `[1w]` op de rest |
-| DB-separatie (BR-G02) | alle | Vault-mappings nooit zichtbaar in audit-rijen |
-| Append-only audit (BR-G01) | alle | Elke call krijgt een nieuwe rij |
+| DB-separatie (BR-G02) | alle | Geen vault-mappings in audit-rijen |
+| Append-only audit (BR-G01) | alle | Elke voltooide upstream-call = nieuwe rij |
 
-Voor automatische verificatie van diezelfde garanties: `uv run pytest
-tests/ -v`. De volledige suite hoort groen te zijn.
+Automatische verificatie: `uv run pytest tests/ -v`.
 
 ---
 
 ## Acceptatie v0.3 (praktijktests)
 
-De v0.3-vlag vereist de drie flows hierboven op een **verse DB** (zie
-[PLAN.md](PLAN.md) §19). Onderstaande tabel koppelt elk DEMO-scenario aan
-automatische proxy-integratietests en handmatige UI-stappen.
+De v0.3-vlag vereist de drie flows op een **verse DB** (zie
+[PLAN.md](PLAN.md) §19). Onderstaande tabel koppelt elk scenario aan
+proxy-integratietests en handmatige UI-stappen.
 
 | Scenario | DEMO | Automatisch (`tests/test_proxy.py`) | Handmatig (UI) |
 | --- | --- | --- | --- |
 | 1 — happy path | § Scenario 1 | `test_clean_prompt_roundtrip_pseudonymizes_and_returns_response` | Home Uitgebreid: mapping + audit-tabs |
-| 2 — review 423 | § Scenario 2 | `test_low_confidence_returns_423_and_enqueues_review`, `test_resume_after_accepting_review_succeeds` | Review-queue Accept + hervat-curl |
-| 3 — TWO_WAY mix | § Scenario 3 | `test_two_way_override_depseudonymizes_response` | Opdrachten: NAME override `[2w]` + audit detail |
+| 2 — review 423 | § Scenario 2 | `test_low_confidence_returns_423_and_enqueues_review`, `test_resume_after_accepting_review_succeeds` | Review Queue + hervat (indien dry-run pending) |
+| 3 — TWO_WAY mix | § Scenario 3 | `test_two_way_override_depseudonymizes_response` | Opdrachten: NAME `[2w]` + audit detail |
 
-**Snelle acceptatie-run** (offline, verse tmp-DB per test):
+**Snelle acceptatie-run** (offline, tmp-DB per test):
 
 ```bash
 uv run pytest tests/test_proxy.py::test_clean_prompt_roundtrip_pseudonymizes_and_returns_response \
@@ -242,6 +258,6 @@ uv run pytest tests/test_proxy.py::test_clean_prompt_roundtrip_pseudonymizes_and
   tests/test_proxy.py::test_two_way_override_depseudonymizes_response -v
 ```
 
-**Volledige handmatige walkthrough:** start proxy (:8080) + Streamlit (:8501),
-zet `ANTHROPIC_API_KEY`, doorloop Scenario 1–3 met de curl/UI-stappen hierboven.
-Laag 3 (Ollama) is **niet** vereist — default `use_llm=False`.
+**Handmatige walkthrough:** proxy (:8080) + Streamlit (:8501),
+`ANTHROPIC_API_KEY`, minimaal één opdracht met `{input}`. Laag 3 (Ollama)
+niet vereist.

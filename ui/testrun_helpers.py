@@ -162,7 +162,7 @@ def _deduce_layer_label() -> str:
 
 
 def external_llm_label(template: Template) -> str:
-    """``Extern LLM via Pylades proxy (claude-opus-4-7)`` op basis van het template."""
+    """``Extern LLM via Pylades proxy (claude-opus-4-8)`` op basis van het template."""
     return f"Extern LLM via Pylades proxy ({template.llm_naam})"
 
 
