@@ -1,6 +1,6 @@
 # Pylades — Architectuurplan (doel: v0.3)
 
-> **Huidige release:** v0.3.0 (`shared/version.py`) · **Doelversie:** v0.3 (deze
+> **Huidige release:** v0.3.1 (`shared/version.py`) · **Doelversie:** v0.3 (deze
 > spec). Bron-spec en business rules: [SPEC-v0.3.md](SPEC-v0.3.md).
 > **Status repo:** Stappen 1–17 geïmplementeerd (zie §19 en §20). Start met
 > `uv run python scripts/pylades_services.py restart` (proxy `:8080`, UI `:8501`).
@@ -9,7 +9,7 @@
 
 ## 1. Wat we bouwen, in één paragraaf
 
-Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.3.0**,
+Pylades is een lokale pseudonimiserende HTTPS-proxy (release **v0.3.1**,
 richting doel **v0.3**) die op het pad `POST /v1/messages` een eigen
 body-contract aanbiedt (zelfde pad als Anthropic, maar geen pass-through),
 plus een Streamlit-beheer-UI. De proxy
@@ -971,7 +971,7 @@ doen, niet alleen dat we het later doen.
 
 ## 19. Status nu, eerstvolgende stap
 
-**Stappen 1–17 (klaar).** Release **v0.3.0** — scaffold, `shared/`, DB-laag, testdata, volledige
+**Stappen 1–17 (klaar).** Release **v0.3.1** — scaffold, `shared/`, DB-laag, testdata, volledige
 proxy-pijplijn, alle UI-pagina's, het v0.3 API-contract (§15a) en UI-shell
 (logo/favicon, theme). **403 tests** groen (canonieke teststand voor dit document).
 `uv run pytest`, `uv run ruff check .`
@@ -1177,7 +1177,7 @@ motivering waarom de stappen *in deze volgorde* staan, zie §14.
   vastgelegd in [DEMO.md](DEMO.md) — clean round-trip, manual review,
   en gemengde ONE_WAY/TWO_WAY-overrides. v1.0 roadmap in
   [README.md](README.md) is eind-gecontroleerd en gespiegeld aan de
-  buiten-scope-lijst hieronder. Testsuite-stand (release v0.3.0):
+  buiten-scope-lijst hieronder. Testsuite-stand (release v0.3.1):
   volledige suite groen (exact aantal in §19). Mypy schoon, ruff schoon.
 
   Project-tree (broncode-bestanden):

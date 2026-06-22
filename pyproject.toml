@@ -1,6 +1,6 @@
 [project]
 name = "pylades"
-version = "0.3.0"
+version = "0.3.1"
 description = "Lokale pseudonimiserende proxy voor extern LLM-gebruik (release sync: shared/version.py)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,7 +27,7 @@ dependencies = [
     "deduce>=3.0.0",
     "ollama>=0.4",
     "pydantic>=2.9",
-    "pydantic-settings>=2.5",
+    "pydantic-settings>=2.14.2",
     "markdown-it-py>=3.0",
 ]
 

@@ -9,7 +9,7 @@ niet de huidige release.
 
 from __future__ import annotations
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 TARGET_VERSION = "0.3.0"
 
 PRODUCT_NAME = "Pylades"
@@ -17,7 +17,7 @@ TAGLINE = "Een metgezel aan wie je je dossier toevertrouwt"
 
 
 def version_display() -> str:
-    """Semver met v-prefix, bv. ``v0.3.0``."""
+    """Semver met v-prefix, bv. ``v0.3.1``."""
     return f"v{__version__}"
 
 
@@ -30,12 +30,12 @@ def target_version_display() -> str:
 
 
 def pylades_display() -> str:
-    """``Pylades v0.3.0``."""
+    """``Pylades v0.3.1``."""
     return f"{PRODUCT_NAME} {version_display()}"
 
 
 def pylades_page_title(page: str) -> str:
-    """Browsertitel: ``Pylades v0.3.0 — Opdrachten``."""
+    """Browsertitel: ``Pylades v0.3.1 — Opdrachten``."""
     return f"{pylades_display()} — {page}"
 
 
@@ -45,5 +45,5 @@ def pylades_home_title() -> str:
 
 
 def pylades_sidebar_version() -> str:
-    """Sidebar onder het logo: ``v0.3.0 POC``."""
+    """Sidebar onder het logo: ``v0.3.1 POC``."""
     return f"{version_display()} POC"
